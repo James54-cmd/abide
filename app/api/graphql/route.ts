@@ -9,6 +9,7 @@ import {
   toItemArray,
 } from "@/lib/server/api-bible";
 import { getSafeAuthRedirectUrl } from "@/lib/auth/redirect";
+import { generateEncouragementForUser } from "@/lib/server/chat-generation";
 import { requireUserFromAuthHeader } from "@/lib/server/supabase-admin";
 
 type Translation = "NIV" | "NLT";
@@ -95,6 +96,42 @@ const typeDefs = `
     updatedAt: String
   }
 
+  type ChatConversation {
+    id: String!
+    title: String!
+    updatedAt: String!
+    createdAt: String!
+  }
+
+  type EncouragementVerse {
+    reference: String!
+    text: String!
+  }
+
+  type Encouragement {
+    intro: String!
+    verses: [EncouragementVerse!]!
+    closing: String!
+  }
+
+  type ChatMessage {
+    id: Int!
+    role: String!
+    content: String!
+    encouragement: Encouragement
+    createdAt: String!
+  }
+
+  input GenerateEncouragementInput {
+    message: String!
+    conversationId: String
+  }
+
+  type GenerateEncouragementPayload {
+    conversationId: String!
+    encouragement: Encouragement!
+  }
+
   input SaveBibleProgressInput {
     translation: String!
     bookId: String!
@@ -106,6 +143,8 @@ const typeDefs = `
     signUp(input: SignUpInput!): AuthPayload!
     login(input: LoginInput!): AuthPayload!
     saveBibleProgress(input: SaveBibleProgressInput!): BibleProgress!
+    deleteChatConversation(id: String!): Boolean!
+    generateEncouragement(input: GenerateEncouragementInput!): GenerateEncouragementPayload!
   }
 
   type Query {
@@ -114,6 +153,8 @@ const typeDefs = `
     bibleChapters(translation: String, bookId: String!): [BibleChapter!]!
     bibleVerses(translation: String, chapterId: String!): [BibleVerse!]!
     bibleProgress: BibleProgress
+    chatConversations: [ChatConversation!]!
+    chatMessages(conversationId: String!): [ChatMessage!]!
   }
 `;
 
@@ -234,6 +275,62 @@ const resolvers = {
         verse: data.verse,
         updatedAt: data.updated_at,
       };
+    },
+    chatConversations: async (
+      _: unknown,
+      __: unknown,
+      context: GraphQlContext
+    ) => {
+      const { user, supabase } = await requireUserFromAuthHeader(context.authHeader);
+      const { data, error } = await supabase
+        .from("chat_conversations")
+        .select("id,title,updated_at,created_at")
+        .eq("user_id", user.id)
+        .order("updated_at", { ascending: false });
+
+      if (error) throw error;
+
+      return (data ?? []).map((conversation) => ({
+        id: conversation.id,
+        title: conversation.title ?? "New conversation",
+        updatedAt: conversation.updated_at,
+        createdAt: conversation.created_at,
+      }));
+    },
+    chatMessages: async (
+      _: unknown,
+      args: { conversationId: string },
+      context: GraphQlContext
+    ) => {
+      const { user, supabase } = await requireUserFromAuthHeader(context.authHeader);
+      const conversationId = args.conversationId?.trim();
+      if (!conversationId) throw new Error("conversationId is required.");
+
+      const { data: conversation, error: convError } = await supabase
+        .from("chat_conversations")
+        .select("id")
+        .eq("id", conversationId)
+        .eq("user_id", user.id)
+        .single();
+      if (convError || !conversation) {
+        throw new Error("Conversation not found.");
+      }
+
+      const { data, error } = await supabase
+        .from("chat_messages")
+        .select("id,role,content,encouragement,created_at")
+        .eq("conversation_id", conversationId)
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: true });
+
+      if (error) throw error;
+      return (data ?? []).map((message) => ({
+        id: message.id,
+        role: message.role,
+        content: message.content,
+        encouragement: message.encouragement,
+        createdAt: message.created_at,
+      }));
     },
   },
   Mutation: {
@@ -364,6 +461,48 @@ const resolvers = {
         chapterId: data.chapter_id,
         verse: data.verse,
         updatedAt: data.updated_at,
+      };
+    },
+    deleteChatConversation: async (
+      _: unknown,
+      args: { id: string },
+      context: GraphQlContext
+    ) => {
+      const { user, supabase } = await requireUserFromAuthHeader(context.authHeader);
+      const id = args.id?.trim();
+      if (!id) throw new Error("Conversation id is required.");
+
+      const { data: conversation, error: convError } = await supabase
+        .from("chat_conversations")
+        .select("id")
+        .eq("id", id)
+        .eq("user_id", user.id)
+        .single();
+      if (convError || !conversation) {
+        throw new Error("Conversation not found.");
+      }
+
+      const { error } = await supabase
+        .from("chat_conversations")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", user.id);
+      if (error) throw error;
+      return true;
+    },
+    generateEncouragement: async (
+      _: unknown,
+      args: { input: { message: string; conversationId?: string | null } },
+      context: GraphQlContext
+    ) => {
+      const result = await generateEncouragementForUser({
+        authHeader: context.authHeader,
+        message: args.input.message,
+        conversationId: args.input.conversationId ?? null,
+      });
+      return {
+        conversationId: result.conversationId,
+        encouragement: result.encouragement,
       };
     },
   },

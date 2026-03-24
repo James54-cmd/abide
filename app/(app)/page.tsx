@@ -1,55 +1,94 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { gql } from "@apollo/client";
 import { useRouter } from "next/navigation";
 import { ChevronRight } from "lucide-react";
 import PageTransition from "@/components/PageTransition";
 import VerseOfTheDay from "@/components/VerseOfTheDay";
 import EncouragementInput from "@/components/EncouragementInput";
-import { verseOfTheDay, mockConversations } from "@/lib/mock-data";
+import { getApolloClient } from "@/lib/graphql/client";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
+import {
+  extractFirstName,
+  getDailyVerse,
+  getGreeting,
+  timeAgo,
+} from "@/lib/home-helpers";
 
-function getGreeting(firstName?: string | null): string {
-  const hour = new Date().getHours();
-  const name = firstName?.trim() || "beloved";
-  if (hour < 12) return `Good morning, ${name} ☀️`;
-  if (hour < 17) return `Good afternoon, ${name} 🌤️`;
-  return `Good evening, ${name} 🌙`;
-}
+type ConversationItem = {
+  id: string;
+  title: string;
+  updatedAt: string;
+  createdAt: string;
+};
 
-function timeAgo(date: Date): string {
-  const diff = Date.now() - date.getTime();
-  const minutes = Math.floor(diff / 60000);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
+type RecentConversation = {
+  id: string;
+  preview: string;
+  lastMessage: string;
+  timestamp: Date;
+};
+
+const CHAT_CONVERSATIONS_QUERY = gql`
+  query ChatConversations {
+    chatConversations {
+      id
+      title
+      updatedAt
+      createdAt
+    }
+  }
+`;
 
 export default function HomePage() {
   const router = useRouter();
   const [firstName, setFirstName] = useState<string | null>(null);
+  const [recentConversations, setRecentConversations] = useState<RecentConversation[]>([]);
+
+  const getAccessToken = async () => {
+    const supabase = getSupabaseBrowserClient();
+    const { data, error } = await supabase.auth.getSession();
+    if (error || !data.session?.access_token) {
+      throw new Error("Please log in again.");
+    }
+    return data.session.access_token;
+  };
 
   useEffect(() => {
-    const loadFirstName = async () => {
+    const loadDashboardData = async () => {
       const supabase = getSupabaseBrowserClient();
       const { data } = await supabase.auth.getSession();
-      const metadata = data.session?.user?.user_metadata as
-        | { first_name?: unknown; full_name?: unknown }
-        | undefined;
+      const metadata = data.session?.user?.user_metadata as {
+        first_name?: unknown;
+        full_name?: unknown;
+      } | undefined;
 
-      const rawFirstName =
-        typeof metadata?.first_name === "string"
-          ? metadata.first_name
-          : typeof metadata?.full_name === "string"
-            ? metadata.full_name.split(" ")[0]
-            : "";
+      setFirstName(extractFirstName(metadata));
 
-      setFirstName(rawFirstName.trim() || null);
+      try {
+        const token = await getAccessToken();
+        const client = getApolloClient();
+        const { data } = await client.query<{ chatConversations?: ConversationItem[] }>({
+          query: CHAT_CONVERSATIONS_QUERY,
+          fetchPolicy: "no-cache",
+          context: { headers: { Authorization: `Bearer ${token}` } },
+        });
+
+        const mapped = (data?.chatConversations ?? []).slice(0, 5).map((conversation) => ({
+          id: conversation.id,
+          preview: conversation.title || "Untitled conversation",
+          lastMessage: "Tap to continue your conversation",
+          timestamp: new Date(conversation.updatedAt),
+        }));
+
+        setRecentConversations(mapped);
+      } catch {
+        setRecentConversations([]);
+      }
     };
 
-    void loadFirstName();
+    void loadDashboardData();
   }, []);
 
   const handleSend = (message: string) => {
@@ -76,7 +115,7 @@ export default function HomePage() {
         </div>
 
         {/* Verse of the Day */}
-        <VerseOfTheDay verse={verseOfTheDay} />
+        <VerseOfTheDay verse={getDailyVerse()} />
 
         {/* Prompt input */}
         <EncouragementInput onSend={handleSend} />
@@ -87,7 +126,7 @@ export default function HomePage() {
             Recent Encouragements
           </h3>
           <div className="space-y-2">
-            {mockConversations.map((conv) => (
+            {recentConversations.map((conv) => (
               <button
                 key={conv.id}
                 onClick={() => router.push("/chat")}
@@ -109,6 +148,11 @@ export default function HomePage() {
                 </div>
               </button>
             ))}
+            {recentConversations.length === 0 && (
+              <p className="text-sm text-muted px-1">
+                No recent encouragements yet. Share what is on your heart to begin.
+              </p>
+            )}
           </div>
         </div>
       </div>

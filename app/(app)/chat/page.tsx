@@ -1,18 +1,20 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { gql } from "@apollo/client";
 import PageTransition from "@/components/PageTransition";
 import ChatBubble from "@/components/ChatBubble";
 import EmptyState from "@/components/ui/EmptyState";
 import LoadingDots from "@/components/LoadingDots";
+import { getApolloClient } from "@/lib/graphql/client";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import type { ChatMessage, Verse } from "@/types";
 
 type ConversationItem = {
   id: string;
   title: string;
-  updated_at: string;
-  created_at: string;
+  updatedAt: string;
+  createdAt: string;
 };
 
 type StoredMessage = {
@@ -20,8 +22,60 @@ type StoredMessage = {
   role: "user" | "assistant";
   content: string;
   encouragement: ChatMessage["encouragement"] | null;
-  created_at: string;
+  createdAt: string;
 };
+
+const CHAT_CONVERSATIONS_QUERY = gql`
+  query ChatConversations {
+    chatConversations {
+      id
+      title
+      updatedAt
+      createdAt
+    }
+  }
+`;
+
+const CHAT_MESSAGES_QUERY = gql`
+  query ChatMessages($conversationId: String!) {
+    chatMessages(conversationId: $conversationId) {
+      id
+      role
+      content
+      encouragement {
+        intro
+        verses {
+          reference
+          text
+        }
+        closing
+      }
+      createdAt
+    }
+  }
+`;
+
+const DELETE_CHAT_CONVERSATION_MUTATION = gql`
+  mutation DeleteChatConversation($id: String!) {
+    deleteChatConversation(id: $id)
+  }
+`;
+
+const GENERATE_ENCOURAGEMENT_MUTATION = gql`
+  mutation GenerateEncouragement($input: GenerateEncouragementInput!) {
+    generateEncouragement(input: $input) {
+      conversationId
+      encouragement {
+        intro
+        verses {
+          reference
+          text
+        }
+        closing
+      }
+    }
+  }
+`;
 
 export default function ChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -41,20 +95,20 @@ export default function ChatPage() {
 
   const loadMessages = useCallback(async (conversationId: string) => {
     const token = await getAccessToken();
-    const response = await fetch(`/api/chat/conversations/${conversationId}/messages`, {
-      headers: { Authorization: `Bearer ${token}` },
+    const client = getApolloClient();
+    const { data } = await client.query<{ chatMessages?: StoredMessage[] }>({
+      query: CHAT_MESSAGES_QUERY,
+      variables: { conversationId },
+      fetchPolicy: "no-cache",
+      context: { headers: { Authorization: `Bearer ${token}` } },
     });
-    const data = (await response.json()) as { messages?: StoredMessage[]; error?: string };
-    if (!response.ok) {
-      throw new Error(data.error || "Unable to load messages.");
-    }
 
-    const mapped = (data.messages ?? []).map((msg) => ({
+    const mapped = (data?.chatMessages ?? []).map((msg) => ({
       id: `${msg.role}-${msg.id}`,
       role: msg.role,
       content: msg.content,
       encouragement: msg.encouragement ?? undefined,
-      timestamp: new Date(msg.created_at),
+      timestamp: new Date(msg.createdAt),
     })) as ChatMessage[];
 
     setMessages(mapped);
@@ -62,18 +116,14 @@ export default function ChatPage() {
 
   const loadConversations = useCallback(async () => {
     const token = await getAccessToken();
-    const response = await fetch("/api/chat/conversations", {
-      headers: { Authorization: `Bearer ${token}` },
+    const client = getApolloClient();
+    const { data } = await client.query<{ chatConversations?: ConversationItem[] }>({
+      query: CHAT_CONVERSATIONS_QUERY,
+      fetchPolicy: "no-cache",
+      context: { headers: { Authorization: `Bearer ${token}` } },
     });
-    const data = (await response.json()) as {
-      conversations?: ConversationItem[];
-      error?: string;
-    };
-    if (!response.ok) {
-      throw new Error(data.error || "Unable to load conversations.");
-    }
 
-    const list = data.conversations ?? [];
+    const list = data?.chatConversations ?? [];
     setConversations(list);
     return list;
   }, [getAccessToken]);
@@ -130,14 +180,12 @@ export default function ChatPage() {
 
   const handleDeleteConversation = useCallback(async (conversationId: string) => {
     const token = await getAccessToken();
-    const response = await fetch(`/api/chat/conversations/${conversationId}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
+    const client = getApolloClient();
+    await client.mutate({
+      mutation: DELETE_CHAT_CONVERSATION_MUTATION,
+      variables: { id: conversationId },
+      context: { headers: { Authorization: `Bearer ${token}` } },
     });
-    const data = (await response.json().catch(() => ({}))) as { error?: string };
-    if (!response.ok) {
-      throw new Error(data.error || "Unable to delete conversation.");
-    }
 
     setConversations((prev) => prev.filter((c) => c.id !== conversationId));
     if (activeConversationId === conversationId) {
@@ -169,36 +217,37 @@ export default function ChatPage() {
 
     try {
       const token = await getAccessToken();
-      const response = await fetch("/api/ai/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+      const client = getApolloClient();
+      const { data } = await client.mutate<{
+        generateEncouragement?: {
+          conversationId: string;
+          encouragement: ChatMessage["encouragement"];
+        };
+      }>({
+        mutation: GENERATE_ENCOURAGEMENT_MUTATION,
+        variables: { input: { message: text, conversationId: activeConversationId } },
+        context: {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         },
-        body: JSON.stringify({ message: text, conversationId: activeConversationId }),
       });
-
-      const data = (await response.json()) as {
-        conversationId?: string;
-        encouragement?: ChatMessage["encouragement"];
-        error?: string;
-      };
-
-      if (!response.ok || !data.encouragement) {
-        throw new Error(data.error || "Unable to generate encouragement right now.");
+      const payload = data?.generateEncouragement;
+      if (!payload?.encouragement) {
+        throw new Error("Unable to generate encouragement right now.");
       }
 
       const aiMsg: ChatMessage = {
         id: `ai-${Date.now()}`,
         role: "assistant",
         content: "",
-        encouragement: data.encouragement,
+        encouragement: payload.encouragement,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, aiMsg]);
 
-      if (data.conversationId && !activeConversationId) {
-        setActiveConversationId(data.conversationId);
+      if (payload.conversationId && !activeConversationId) {
+        setActiveConversationId(payload.conversationId);
       }
       await loadConversations();
     } catch {
