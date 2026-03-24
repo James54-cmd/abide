@@ -1,0 +1,7 @@
+{
+  "/(app)/bible/page": "app/(app)/bible/page.js",
+  "/(app)/verses/page": "app/(app)/verses/page.js",
+  "/(app)/chat/page": "app/(app)/chat/page.js",
+  "/(app)/page": "app/(app)/page.js",
+  "/(app)/favorites/page": "app/(app)/favorites/page.js"
+}
