@@ -1,11 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Cross, Menu, X } from "lucide-react";
+import { Cross, Menu, MoreVertical, X } from "lucide-react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+
 
 type BibleHeaderState = {
   chapterLabel: string;
@@ -92,16 +101,41 @@ export default function TopBar() {
 
   return (
     <header className="sticky top-0 z-50 bg-parchment/90 dark:bg-dark-bg/90 backdrop-blur-md border-b border-gold/10">
-      <div className="flex items-center justify-between h-14 px-4">
-        <div className="flex items-center gap-2">
-          <Cross className="w-5 h-5 text-gold" strokeWidth={1.5} />
-          <h1 className="text-xl font-serif font-semibold text-ink dark:text-parchment tracking-tight">
+      <div className="flex items-center justify-between gap-2 h-14 px-4 min-h-14">
+        <Link
+          href="/"
+          className="flex items-center gap-2 min-w-0 flex-1 rounded-lg -ml-1 pl-1 pr-2 py-1 hover:bg-gold/5 transition-colors"
+        >
+          <Cross className="w-5 h-5 text-gold flex-shrink-0" strokeWidth={1.5} aria-hidden />
+          <span className="text-xl font-serif font-semibold text-ink dark:text-parchment tracking-tight">
             Abide
-          </h1>
-        </div>
-        <Button variant="outline" size="sm" onClick={handleLogout}>
-          Logout
-        </Button>
+          </span>
+        </Link>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-9 w-9 rounded-full border-gold/15 flex-shrink-0"
+              aria-label="Open menu"
+            >
+              <MoreVertical className="h-4 w-4 text-ink dark:text-parchment" strokeWidth={1.5} />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem asChild className="cursor-pointer">
+              <Link href="/settings">Settings</Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="cursor-pointer text-red-600 focus:bg-red-500/10 focus:text-red-600 dark:focus:text-red-500"
+              onClick={() => void handleLogout()}
+            >
+              Log out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
       {isBiblePage ? (
         <div className="bg-parchment/95 dark:bg-dark-bg/95 backdrop-blur-sm border-t border-gold/10 px-4 py-3 flex items-center justify-between">
