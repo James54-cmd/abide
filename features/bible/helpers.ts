@@ -13,6 +13,13 @@ export type BibleHighlight = {
   color: string;
 };
 
+/** Min/max span of selected verse numbers; `contiguous` is false if gaps exist (e.g. 1 and 3 only). */
+export type SelectedRange = {
+  start: number;
+  end: number;
+  contiguous: boolean;
+};
+
 export const FONT_SIZE_CLASSES: Record<FontSize, string> = {
   small: "text-sm",
   medium: "text-base",
@@ -47,10 +54,20 @@ export const HIGHLIGHT_COLORS: { key: HighlightColor; chipClass: string; textCla
   { key: "purple", chipClass: "bg-violet-300", textClass: "bg-violet-200/60 dark:bg-violet-400/25" },
 ];
 
-export function getSelectedRange(selectedVerses: number[]) {
+export function getSelectedRange(selectedVerses: number[]): SelectedRange | null {
   if (selectedVerses.length === 0) return null;
   const sorted = [...selectedVerses].sort((a, b) => a - b);
-  return { start: sorted[0], end: sorted[sorted.length - 1] };
+  const start = sorted[0];
+  const end = sorted[sorted.length - 1];
+  const contiguous = sorted.length === end - start + 1;
+  return { start, end, contiguous };
+}
+
+export function formatVerseSelectionLabel(range: SelectedRange | null, selectedCount: number): string {
+  if (!range || selectedCount === 0) return "No verses selected";
+  if (selectedCount === 1 || range.start === range.end) return `Verse ${range.start}`;
+  if (range.contiguous) return `Verses ${range.start}–${range.end}`;
+  return `${selectedCount} verses selected`;
 }
 
 export function getVerseHighlightTextClass(verseNumber: number, highlights: BibleHighlight[]) {
@@ -73,9 +90,12 @@ export function buildVerseTextClasses(args: {
   );
 }
 
-export function buildSelectedCopyText(verses: BibleVerse[], range: { start: number; end: number }) {
+/** Copies only the verses actually selected (handles non-contiguous picks). */
+export function buildSelectedCopyText(verses: BibleVerse[], selectedVerses: number[]) {
+  const set = new Set(selectedVerses);
   return verses
-    .filter((v) => v.verse >= range.start && v.verse <= range.end)
+    .filter((v) => set.has(v.verse))
+    .sort((a, b) => a.verse - b.verse)
     .map((v) => `${v.reference} ${v.text}`)
     .join("\n");
 }

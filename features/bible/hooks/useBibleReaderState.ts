@@ -264,15 +264,17 @@ export function useBibleReaderState() {
   };
 
   const handleCopySelected = async () => {
-    if (!selectedRange) return;
-    const selectedTexts = buildSelectedCopyText(verses, selectedRange);
+    if (!selectedRange || selectedVerses.length === 0) return;
+    const selectedTexts = buildSelectedCopyText(verses, selectedVerses);
     try {
       await navigator.clipboard.writeText(selectedTexts);
-      setToast(
-        selectedRange.start === selectedRange.end
-          ? `Copied verse ${selectedRange.start}`
-          : `Copied verses ${selectedRange.start}-${selectedRange.end}`
-      );
+      if (selectedVerses.length === 1) {
+        setToast(`Copied verse ${selectedRange.start}`);
+      } else if (selectedRange.contiguous) {
+        setToast(`Copied verses ${selectedRange.start}–${selectedRange.end}`);
+      } else {
+        setToast(`Copied ${selectedVerses.length} verses`);
+      }
     } catch {
       setToast("Copy failed");
     }
@@ -286,6 +288,10 @@ export function useBibleReaderState() {
 
   const handleSaveHighlight = async (colorOverride?: HighlightColor) => {
     if (!selectedRange) return;
+    if (!selectedRange.contiguous) {
+      setToast("Choose a continuous range to highlight");
+      return;
+    }
     const token = await getAccessToken();
     if (!token) {
       setToast("Please log in to save highlights");
@@ -341,6 +347,10 @@ export function useBibleReaderState() {
   const handleSaveNote = () => {
     void (async () => {
       if (!selectedRange || !noteDraft.trim()) return;
+      if (!selectedRange.contiguous) {
+        setToast("Choose a continuous range for notes");
+        return;
+      }
       const token = await getAccessToken();
       if (!token) {
         setToast("Please log in to save notes");
@@ -364,30 +374,6 @@ export function useBibleReaderState() {
         setIsCreatingNote(false);
         setToast("Note saved");
       }
-    })();
-  };
-
-  const handleRemoveHighlight = () => {
-    void (async () => {
-      if (!selectedRange) return;
-      const token = await getAccessToken();
-      if (!token) return;
-      const overlapping = getOverlappingHighlights(selectedRange.start, selectedRange.end);
-      if (overlapping.length === 0) {
-        setToast("No highlight to remove");
-        return;
-      }
-      for (const h of overlapping) {
-        const { error } = await deleteHighlight(h.id);
-        if (error) {
-          setToast("Unable to remove highlight");
-          return;
-        }
-      }
-      setHighlights((prev) => prev.filter((h) => !overlapping.some((x) => x.id === h.id)));
-      setToast("Highlight removed");
-      setSelectedVerses([]);
-      setSelectionAnchor(null);
     })();
   };
 
@@ -488,7 +474,6 @@ export function useBibleReaderState() {
     handleCopySelected,
     handleSaveHighlight,
     handleSaveNote,
-    handleRemoveHighlight,
     handleDeleteNote,
     verseTextClasses,
     chapterLabel,

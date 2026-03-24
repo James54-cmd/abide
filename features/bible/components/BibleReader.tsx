@@ -4,8 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import EmptyState from "@/components/ui/EmptyState";
 import { cn } from "@/lib/utils";
 import { getVerseHighlightTextClass } from "@/features/bible/helpers";
-import type { BibleHighlight } from "@/features/bible/helpers";
-import type { BibleVerse } from "@/features/bible/helpers";
+import type { BibleHighlight, BibleVerse } from "@/features/bible/helpers";
 
 type BibleReaderProps = {
   toast: string | null;
@@ -16,7 +15,6 @@ type BibleReaderProps = {
   selectedVerses: number[];
   highlights: BibleHighlight[];
   verseTextClasses: string;
-  selectedRange: { start: number; end: number } | null;
   onSelectVerse: (verseNumber: number, shiftKey: boolean) => void;
 };
 
@@ -29,7 +27,6 @@ export function BibleReader({
   selectedVerses,
   highlights,
   verseTextClasses,
-  selectedRange,
   onSelectVerse,
 }: BibleReaderProps) {
   return (
@@ -48,7 +45,7 @@ export function BibleReader({
         ) : null}
       </AnimatePresence>
 
-      <div className={cn("px-5 py-6", selectedRange ? "pb-28" : "")}>
+      <div className={cn("px-5 py-6", selectedVerses.length > 0 ? "pb-28" : "")}>
         {error ? (
           <p className="text-xs text-red-600 text-center">{error}</p>
         ) : isLoading ? (

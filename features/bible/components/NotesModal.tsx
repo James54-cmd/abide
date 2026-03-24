@@ -3,6 +3,8 @@
 import { motion } from "framer-motion";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { formatVerseSelectionLabel } from "@/features/bible/helpers";
+import type { SelectedRange } from "@/features/bible/helpers";
 import type { BibleNote } from "@/features/bible/types";
 
 type NotesModalProps = {
@@ -15,7 +17,8 @@ type NotesModalProps = {
   onSaveNote: () => void;
   onCancelCreate: () => void;
   onDeleteNote: (id: string) => void;
-  selectedRange: { start: number; end: number } | null;
+  selectedRange: SelectedRange | null;
+  selectedVerseCount: number;
 };
 
 export function NotesModal({
@@ -29,6 +32,7 @@ export function NotesModal({
   onCancelCreate,
   onDeleteNote,
   selectedRange,
+  selectedVerseCount,
 }: NotesModalProps) {
   if (!open) return null;
 
@@ -54,11 +58,7 @@ export function NotesModal({
             {isCreatingNote ? (
               <div className="space-y-3">
                 <p className="text-xs text-gold font-medium">
-                  {selectedRange
-                    ? selectedRange.start === selectedRange.end
-                      ? `Verse ${selectedRange.start}`
-                      : `Verses ${selectedRange.start}-${selectedRange.end}`
-                    : "No verses selected"}
+                  {formatVerseSelectionLabel(selectedRange, selectedVerseCount)}
                 </p>
                 <textarea
                   value={noteDraft}

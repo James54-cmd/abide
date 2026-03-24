@@ -13,33 +13,27 @@ export default function BiblePage() {
 
   return (
     <PageTransition>
-      <div className="bg-parchment dark:bg-dark-bg">
-        <main>
-          <BibleReader
-            toast={s.toast}
-            error={s.error}
-            isLoading={s.isLoading}
-            chapterId={s.chapterId}
-            verses={s.verses}
-            selectedVerses={s.selectedVerses}
-            highlights={s.highlights}
-            verseTextClasses={s.verseTextClasses}
-            selectedRange={s.selectedRange}
-            onSelectVerse={s.handleSelectVerse}
-          />
-        </main>
-      </div>
+      <BibleReader
+        toast={s.toast}
+        error={s.error}
+        isLoading={s.isLoading}
+        chapterId={s.chapterId}
+        verses={s.verses}
+        selectedVerses={s.selectedVerses}
+        highlights={s.highlights}
+        verseTextClasses={s.verseTextClasses}
+        onSelectVerse={s.handleSelectVerse}
+      />
 
       <HighlightBar
         selectedRange={s.selectedRange}
+        selectedVerseCount={s.selectedVerses.length}
         selectedHighlightColor={s.selectedHighlightColor}
         onClearSelection={() => {
           s.setSelectedVerses([]);
           s.setSelectionAnchor(null);
         }}
         onCopy={() => void s.handleCopySelected()}
-        onHighlight={() => void s.handleSaveHighlight()}
-        onRemoveHighlight={s.handleRemoveHighlight}
         onOpenNote={() => {
           s.setIsNotesOpen(true);
           s.setIsCreatingNote(true);
@@ -106,6 +100,7 @@ export default function BiblePage() {
         }}
         onDeleteNote={s.handleDeleteNote}
         selectedRange={s.selectedRange}
+        selectedVerseCount={s.selectedVerses.length}
       />
     </PageTransition>
   );
