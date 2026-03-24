@@ -30,13 +30,15 @@ type RecentConversation = {
   timestamp: Date;
 };
 
-const CHAT_CONVERSATIONS_QUERY = gql`
-  query ChatConversations {
-    chatConversations {
-      id
-      title
-      updatedAt
-      createdAt
+const CHAT_BOOTSTRAP_QUERY = gql`
+  query ChatBootstrapHome($includeMessages: Boolean) {
+    chatBootstrap(includeMessages: $includeMessages) {
+      conversations {
+        id
+        title
+        updatedAt
+        createdAt
+      }
     }
   }
 `;
@@ -69,13 +71,16 @@ export default function HomePage() {
       try {
         const token = await getAccessToken();
         const client = getApolloClient();
-        const { data } = await client.query<{ chatConversations?: ConversationItem[] }>({
-          query: CHAT_CONVERSATIONS_QUERY,
+        const { data } = await client.query<{
+          chatBootstrap?: { conversations: ConversationItem[] };
+        }>({
+          query: CHAT_BOOTSTRAP_QUERY,
+          variables: { includeMessages: false },
           fetchPolicy: "no-cache",
           context: { headers: { Authorization: `Bearer ${token}` } },
         });
 
-        const mapped = (data?.chatConversations ?? []).slice(0, 5).map((conversation) => ({
+        const mapped = (data?.chatBootstrap?.conversations ?? []).slice(0, 5).map((conversation) => ({
           id: conversation.id,
           preview: conversation.title || "Untitled conversation",
           lastMessage: "Tap to continue your conversation",

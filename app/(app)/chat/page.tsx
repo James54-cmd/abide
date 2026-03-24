@@ -25,32 +25,36 @@ type StoredMessage = {
   createdAt: string;
 };
 
-const CHAT_CONVERSATIONS_QUERY = gql`
-  query ChatConversations {
-    chatConversations {
-      id
-      title
-      updatedAt
-      createdAt
-    }
-  }
-`;
+type ChatBootstrapPayload = {
+  conversations: ConversationItem[];
+  messages: StoredMessage[];
+  activeConversationId: string | null;
+};
 
-const CHAT_MESSAGES_QUERY = gql`
-  query ChatMessages($conversationId: String!) {
-    chatMessages(conversationId: $conversationId) {
-      id
-      role
-      content
-      encouragement {
-        intro
-        verses {
-          reference
-          text
-        }
-        closing
+const CHAT_BOOTSTRAP_QUERY = gql`
+  query ChatBootstrap($conversationId: String, $includeMessages: Boolean) {
+    chatBootstrap(conversationId: $conversationId, includeMessages: $includeMessages) {
+      conversations {
+        id
+        title
+        updatedAt
+        createdAt
       }
-      createdAt
+      messages {
+        id
+        role
+        content
+        encouragement {
+          intro
+          verses {
+            reference
+            text
+          }
+          closing
+        }
+        createdAt
+      }
+      activeConversationId
     }
   }
 `;
@@ -77,6 +81,19 @@ const GENERATE_ENCOURAGEMENT_MUTATION = gql`
   }
 `;
 
+function mapRowsToChatMessages(rows: StoredMessage[]): ChatMessage[] {
+  return rows.map(
+    (msg) =>
+      ({
+        id: `${msg.role}-${msg.id}`,
+        role: msg.role,
+        content: msg.content,
+        encouragement: msg.encouragement ?? undefined,
+        timestamp: new Date(msg.createdAt),
+      }) as ChatMessage
+  );
+}
+
 export default function ChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
@@ -93,58 +110,78 @@ export default function ChatPage() {
     return data.session.access_token;
   }, []);
 
-  const loadMessages = useCallback(async (conversationId: string) => {
-    const token = await getAccessToken();
-    const client = getApolloClient();
-    const { data } = await client.query<{ chatMessages?: StoredMessage[] }>({
-      query: CHAT_MESSAGES_QUERY,
-      variables: { conversationId },
-      fetchPolicy: "no-cache",
-      context: { headers: { Authorization: `Bearer ${token}` } },
-    });
-
-    const mapped = (data?.chatMessages ?? []).map((msg) => ({
-      id: `${msg.role}-${msg.id}`,
-      role: msg.role,
-      content: msg.content,
-      encouragement: msg.encouragement ?? undefined,
-      timestamp: new Date(msg.createdAt),
-    })) as ChatMessage[];
-
-    setMessages(mapped);
-  }, [getAccessToken]);
-
-  const loadConversations = useCallback(async () => {
-    const token = await getAccessToken();
-    const client = getApolloClient();
-    const { data } = await client.query<{ chatConversations?: ConversationItem[] }>({
-      query: CHAT_CONVERSATIONS_QUERY,
-      fetchPolicy: "no-cache",
-      context: { headers: { Authorization: `Bearer ${token}` } },
-    });
-
-    const list = data?.chatConversations ?? [];
-    setConversations(list);
-    return list;
-  }, [getAccessToken]);
-
-  useEffect(() => {
-    const bootstrap = async () => {
+  const loadChatBootstrap = useCallback(
+    async (args: {
+      conversationId?: string | null;
+      includeMessages: boolean;
+      signal?: AbortSignal;
+    }) => {
+      if (args.includeMessages) {
+        setIsLoading(true);
+      }
       try {
-        const list = await loadConversations();
-        if (list.length > 0) {
-          setActiveConversationId(list[0].id);
-          await loadMessages(list[0].id);
+        const token = await getAccessToken();
+        if (args.signal?.aborted) return;
+        const client = getApolloClient();
+        const { data } = await client.query<{ chatBootstrap?: ChatBootstrapPayload }>({
+          query: CHAT_BOOTSTRAP_QUERY,
+          variables: {
+            conversationId: args.conversationId ?? null,
+            includeMessages: args.includeMessages,
+          },
+          fetchPolicy: "no-cache",
+          context: {
+            headers: { Authorization: `Bearer ${token}` },
+            ...(args.signal ? { fetchOptions: { signal: args.signal } } : {}),
+          },
+        });
+        if (args.signal?.aborted) return;
+
+        const payload = data?.chatBootstrap;
+        if (!payload) {
+          throw new Error("Unable to load chat.");
+        }
+
+        setConversations(payload.conversations);
+
+        if (args.includeMessages) {
+          setActiveConversationId(payload.activeConversationId);
+          setMessages(mapRowsToChatMessages(payload.messages ?? []));
         }
       } catch {
-        setConversations([]);
-        setMessages([]);
+        if (!args.signal?.aborted && args.includeMessages) {
+          setConversations([]);
+          setMessages([]);
+          setActiveConversationId(null);
+        }
       } finally {
-        setIsBootstrapping(false);
+        if (!args.signal?.aborted && args.includeMessages) {
+          setIsLoading(false);
+        }
+      }
+    },
+    [getAccessToken]
+  );
+
+  useEffect(() => {
+    const abortController = new AbortController();
+
+    const run = async () => {
+      try {
+        await loadChatBootstrap({
+          includeMessages: true,
+          signal: abortController.signal,
+        });
+      } finally {
+        if (!abortController.signal.aborted) {
+          setIsBootstrapping(false);
+        }
       }
     };
-    bootstrap();
-  }, [loadConversations, loadMessages]);
+
+    void run();
+    return () => abortController.abort();
+  }, [loadChatBootstrap]);
 
   const handleNewConversation = () => {
     setActiveConversationId(null);
@@ -157,15 +194,15 @@ export default function ChatPage() {
     return () => window.removeEventListener("abide:chat-new-conversation", onNewConversation);
   }, []);
 
-  const handleSelectConversation = useCallback(async (conversationId: string) => {
-    setActiveConversationId(conversationId);
-    setIsLoading(true);
-    try {
-      await loadMessages(conversationId);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [loadMessages]);
+  const handleSelectConversation = useCallback(
+    async (conversationId: string) => {
+      await loadChatBootstrap({
+        conversationId,
+        includeMessages: true,
+      });
+    },
+    [loadChatBootstrap]
+  );
 
   useEffect(() => {
     const onSelectConversation = (event: Event) => {
@@ -178,21 +215,24 @@ export default function ChatPage() {
     return () => window.removeEventListener("abide:chat-select-conversation", onSelectConversation);
   }, [handleSelectConversation]);
 
-  const handleDeleteConversation = useCallback(async (conversationId: string) => {
-    const token = await getAccessToken();
-    const client = getApolloClient();
-    await client.mutate({
-      mutation: DELETE_CHAT_CONVERSATION_MUTATION,
-      variables: { id: conversationId },
-      context: { headers: { Authorization: `Bearer ${token}` } },
-    });
+  const handleDeleteConversation = useCallback(
+    async (conversationId: string) => {
+      const token = await getAccessToken();
+      const client = getApolloClient();
+      await client.mutate({
+        mutation: DELETE_CHAT_CONVERSATION_MUTATION,
+        variables: { id: conversationId },
+        context: { headers: { Authorization: `Bearer ${token}` } },
+      });
 
-    setConversations((prev) => prev.filter((c) => c.id !== conversationId));
-    if (activeConversationId === conversationId) {
-      setActiveConversationId(null);
-      setMessages([]);
-    }
-  }, [activeConversationId, getAccessToken]);
+      setConversations((prev) => prev.filter((c) => c.id !== conversationId));
+      if (activeConversationId === conversationId) {
+        setActiveConversationId(null);
+        setMessages([]);
+      }
+    },
+    [activeConversationId, getAccessToken]
+  );
 
   useEffect(() => {
     const onDeleteConversation = (event: Event) => {
@@ -205,78 +245,86 @@ export default function ChatPage() {
     return () => window.removeEventListener("abide:chat-delete-conversation", onDeleteConversation);
   }, [handleDeleteConversation]);
 
-  const handleSend = useCallback(async (text: string) => {
-    const userMsg: ChatMessage = {
-      id: `user-${Date.now()}`,
-      role: "user",
-      content: text,
-      timestamp: new Date(),
-    };
-    setMessages((prev) => [...prev, userMsg]);
-    setIsLoading(true);
+  const handleSend = useCallback(
+    async (text: string) => {
+      const userMsg: ChatMessage = {
+        id: `user-${Date.now()}`,
+        role: "user",
+        content: text,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, userMsg]);
+      setIsLoading(true);
 
-    try {
-      const token = await getAccessToken();
-      const client = getApolloClient();
-      const { data } = await client.mutate<{
-        generateEncouragement?: {
-          conversationId: string;
-          encouragement: ChatMessage["encouragement"];
-        };
-      }>({
-        mutation: GENERATE_ENCOURAGEMENT_MUTATION,
-        variables: { input: { message: text, conversationId: activeConversationId } },
-        context: {
-          headers: {
-            Authorization: `Bearer ${token}`,
+      try {
+        const token = await getAccessToken();
+        const client = getApolloClient();
+        const { data } = await client.mutate<{
+          generateEncouragement?: {
+            conversationId: string;
+            encouragement: ChatMessage["encouragement"];
+          };
+        }>({
+          mutation: GENERATE_ENCOURAGEMENT_MUTATION,
+          variables: { input: { message: text, conversationId: activeConversationId } },
+          context: {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
           },
-        },
-      });
-      const payload = data?.generateEncouragement;
-      if (!payload?.encouragement) {
-        throw new Error("Unable to generate encouragement right now.");
-      }
+        });
+        const payload = data?.generateEncouragement;
+        if (!payload?.encouragement) {
+          throw new Error("Unable to generate encouragement right now.");
+        }
 
-      const aiMsg: ChatMessage = {
-        id: `ai-${Date.now()}`,
-        role: "assistant",
-        content: "",
-        encouragement: payload.encouragement,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, aiMsg]);
+        const aiMsg: ChatMessage = {
+          id: `ai-${Date.now()}`,
+          role: "assistant",
+          content: "",
+          encouragement: payload.encouragement,
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, aiMsg]);
 
-      if (payload.conversationId && !activeConversationId) {
-        setActiveConversationId(payload.conversationId);
+        const newActiveId = payload.conversationId || activeConversationId;
+        if (payload.conversationId && !activeConversationId) {
+          setActiveConversationId(payload.conversationId);
+        }
+
+        await loadChatBootstrap({
+          conversationId: newActiveId,
+          includeMessages: false,
+        });
+      } catch {
+        const fallback: ChatMessage = {
+          id: `ai-error-${Date.now()}`,
+          role: "assistant",
+          content: "",
+          encouragement: {
+            intro: "I am having trouble responding right now, but God is still near to you.",
+            verses: [
+              {
+                reference: "Psalm 46:1",
+                text: "God is our refuge and strength, an ever-present help in trouble.",
+              },
+              {
+                reference: "Matthew 11:28",
+                text: "Come to me, all you who are weary and burdened, and I will give you rest.",
+              },
+            ],
+            closing:
+              "Take a deep breath and bring this to the Lord in prayer. You are not alone.",
+          },
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, fallback]);
+      } finally {
+        setIsLoading(false);
       }
-      await loadConversations();
-    } catch {
-      const fallback: ChatMessage = {
-        id: `ai-error-${Date.now()}`,
-        role: "assistant",
-        content: "",
-        encouragement: {
-          intro: "I am having trouble responding right now, but God is still near to you.",
-          verses: [
-            {
-              reference: "Psalm 46:1",
-              text: "God is our refuge and strength, an ever-present help in trouble.",
-            },
-            {
-              reference: "Matthew 11:28",
-              text: "Come to me, all you who are weary and burdened, and I will give you rest.",
-            },
-          ],
-          closing:
-            "Take a deep breath and bring this to the Lord in prayer. You are not alone.",
-        },
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, fallback]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [activeConversationId, getAccessToken, loadConversations]);
+    },
+    [activeConversationId, getAccessToken, loadChatBootstrap]
+  );
 
   useEffect(() => {
     const onSend = (event: Event) => {

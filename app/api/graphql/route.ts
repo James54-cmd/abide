@@ -22,6 +22,24 @@ type GraphQlContext = {
 
 const DEFAULT_TRANSLATION: Translation = "NIV";
 
+function mapChatMessagesFromRows(
+  rows: {
+    id: number;
+    role: string;
+    content: string;
+    encouragement: unknown;
+    created_at: string;
+  }[]
+) {
+  return rows.map((message) => ({
+    id: message.id,
+    role: message.role,
+    content: message.content,
+    encouragement: message.encouragement,
+    createdAt: message.created_at,
+  }));
+}
+
 async function safeFetchChaptersForBook(bibleId: string, bookId: string): Promise<unknown | null> {
   try {
     return await apiBibleGetCached(`/v1/bibles/${bibleId}/books/${bookId}/chapters`);
@@ -142,6 +160,12 @@ const typeDefs = `
     createdAt: String!
   }
 
+  type ChatBootstrapPayload {
+    conversations: [ChatConversation!]!
+    messages: [ChatMessage!]!
+    activeConversationId: String
+  }
+
   input GenerateEncouragementInput {
     message: String!
     conversationId: String
@@ -174,8 +198,10 @@ const typeDefs = `
       preferredBookId: String
       preferredChapterId: String
     ): BibleBootstrapPayload!
-    chatConversations: [ChatConversation!]!
-    chatMessages(conversationId: String!): [ChatMessage!]!
+    chatBootstrap(
+      conversationId: String
+      includeMessages: Boolean
+    ): ChatBootstrapPayload!
   }
 `;
 
@@ -328,61 +354,68 @@ const resolvers = {
           : null,
       };
     },
-    chatConversations: async (
+    chatBootstrap: async (
       _: unknown,
-      __: unknown,
+      args: { conversationId?: string | null; includeMessages?: boolean | null },
       context: GraphQlContext
     ) => {
       const { user, supabase } = await requireUserFromAuthHeader(context.authHeader);
-      const { data, error } = await supabase
+      const includeMessages = args.includeMessages !== false;
+
+      const { data: convRows, error: convError } = await supabase
         .from("chat_conversations")
         .select("id,title,updated_at,created_at")
         .eq("user_id", user.id)
         .order("updated_at", { ascending: false });
 
-      if (error) throw error;
+      if (convError) throw convError;
 
-      return (data ?? []).map((conversation) => ({
+      const conversations = (convRows ?? []).map((conversation) => ({
         id: conversation.id,
         title: conversation.title ?? "New conversation",
         updatedAt: conversation.updated_at,
         createdAt: conversation.created_at,
       }));
-    },
-    chatMessages: async (
-      _: unknown,
-      args: { conversationId: string },
-      context: GraphQlContext
-    ) => {
-      const { user, supabase } = await requireUserFromAuthHeader(context.authHeader);
-      const conversationId = args.conversationId?.trim();
-      if (!conversationId) throw new Error("conversationId is required.");
 
-      const { data: conversation, error: convError } = await supabase
-        .from("chat_conversations")
-        .select("id")
-        .eq("id", conversationId)
-        .eq("user_id", user.id)
-        .single();
-      if (convError || !conversation) {
-        throw new Error("Conversation not found.");
+      const requestedId = args.conversationId?.trim() ?? "";
+      const activeConversationId =
+        requestedId && conversations.some((c) => c.id === requestedId)
+          ? requestedId
+          : conversations[0]?.id ?? null;
+
+      let messages: {
+        id: number;
+        role: string;
+        content: string;
+        encouragement: unknown;
+        createdAt: string;
+      }[] = [];
+
+      if (includeMessages && activeConversationId) {
+        const { data: msgRows, error: msgError } = await supabase
+          .from("chat_messages")
+          .select("id,role,content,encouragement,created_at")
+          .eq("conversation_id", activeConversationId)
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: true });
+
+        if (msgError) throw msgError;
+        messages = mapChatMessagesFromRows(
+          (msgRows ?? []) as {
+            id: number;
+            role: string;
+            content: string;
+            encouragement: unknown;
+            created_at: string;
+          }[]
+        );
       }
 
-      const { data, error } = await supabase
-        .from("chat_messages")
-        .select("id,role,content,encouragement,created_at")
-        .eq("conversation_id", conversationId)
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: true });
-
-      if (error) throw error;
-      return (data ?? []).map((message) => ({
-        id: message.id,
-        role: message.role,
-        content: message.content,
-        encouragement: message.encouragement,
-        createdAt: message.created_at,
-      }));
+      return {
+        conversations,
+        messages,
+        activeConversationId,
+      };
     },
   },
   Mutation: {
