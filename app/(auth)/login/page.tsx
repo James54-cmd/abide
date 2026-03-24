@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import AuthShell from "@/components/auth/AuthShell";
-import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
 import { loginWithGraphql, signUpWithGraphql } from "@/lib/graphql/auth";
 import { getSafeAuthRedirectUrl } from "@/lib/auth/redirect";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
@@ -23,33 +22,9 @@ export default function LoginPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
   const [isLoadingCredentials, setIsLoadingCredentials] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  const handleGoogleSignIn = async () => {
-    try {
-      setIsLoadingGoogle(true);
-      setMessage(null);
-      setError(null);
-
-      const supabase = getSupabaseBrowserClient();
-      const redirectTo = getAuthRedirectUrl();
-      const { error: signInError } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: { redirectTo },
-      });
-
-      if (signInError) {
-        throw signInError;
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to sign in with Google.");
-    } finally {
-      setIsLoadingGoogle(false);
-    }
-  };
 
   const validateForm = () => {
     if (mode === "signup" && !fullName.trim()) {
@@ -190,7 +165,7 @@ export default function LoginPage() {
 
         <button
           onClick={handleCredentialsSubmit}
-          disabled={isLoadingCredentials || isLoadingGoogle}
+          disabled={isLoadingCredentials}
           className="w-full bg-gold text-white rounded-full py-3.5 text-sm font-semibold shadow-warm transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {isLoadingCredentials
@@ -202,11 +177,6 @@ export default function LoginPage() {
               : "Log in"}
         </button>
 
-        <GoogleSignInButton
-          onClick={handleGoogleSignIn}
-          disabled={isLoadingGoogle || isLoadingCredentials}
-          isLoading={isLoadingGoogle}
-        />
         {message ? <p className="text-xs text-green-700 text-center">{message}</p> : null}
         {error ? <p className="text-xs text-red-600 text-center">{error}</p> : null}
       </div>
