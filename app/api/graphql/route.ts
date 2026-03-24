@@ -8,6 +8,7 @@ import {
   normalizeText,
   toItemArray,
 } from "@/lib/server/api-bible";
+import { getSafeAuthRedirectUrl } from "@/lib/auth/redirect";
 import { requireUserFromAuthHeader } from "@/lib/server/supabase-admin";
 
 type Translation = "NIV" | "NLT";
@@ -255,12 +256,16 @@ const resolvers = {
 
       const supabase = createClient(supabaseUrl, supabaseAnonKey);
       const { fullName, email, password, redirectTo } = args.input;
+      const safeRedirectTo = getSafeAuthRedirectUrl({
+        requestedRedirectTo: redirectTo,
+        siteUrl: process.env.NEXT_PUBLIC_SITE_URL,
+      });
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: { full_name: fullName },
-          ...(redirectTo ? { emailRedirectTo: redirectTo } : {}),
+          ...(safeRedirectTo ? { emailRedirectTo: safeRedirectTo } : {}),
         },
       });
 

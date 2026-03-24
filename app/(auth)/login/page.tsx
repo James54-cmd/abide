@@ -5,7 +5,17 @@ import { useRouter } from "next/navigation";
 import AuthShell from "@/components/auth/AuthShell";
 import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
 import { loginWithGraphql, signUpWithGraphql } from "@/lib/graphql/auth";
+import { getSafeAuthRedirectUrl } from "@/lib/auth/redirect";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
+
+function getAuthRedirectUrl() {
+  return (
+    getSafeAuthRedirectUrl({
+      siteUrl: process.env.NEXT_PUBLIC_SITE_URL,
+      fallbackOrigin: window.location.origin,
+    }) ?? `${window.location.origin}/auth/callback`
+  );
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -25,7 +35,7 @@ export default function LoginPage() {
       setError(null);
 
       const supabase = getSupabaseBrowserClient();
-      const redirectTo = `${window.location.origin}/auth/callback`;
+      const redirectTo = getAuthRedirectUrl();
       const { error: signInError } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: { redirectTo },
@@ -69,7 +79,7 @@ export default function LoginPage() {
       setError(null);
 
       if (mode === "signup") {
-        const redirectTo = `${window.location.origin}/auth/callback`;
+        const redirectTo = getAuthRedirectUrl();
         const result = await signUpWithGraphql({
           fullName: fullName.trim(),
           email,
