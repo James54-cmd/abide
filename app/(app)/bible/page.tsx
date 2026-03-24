@@ -14,22 +14,26 @@ import {
   DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import {
+  buildSelectedCopyText,
+  buildVerseTextClasses,
+  FONT_SIZE_LABELS,
+  getSelectedRange,
+  getVerseHighlightTextClass,
+  HIGHLIGHT_COLORS,
+  type BibleHighlight,
+  type BibleVerse,
+  type FontFamily,
+  type FontSize,
+  type HighlightColor,
+  type LineSpacing,
+} from "./helpers";
 
 type Translation = "NIV" | "NLT";
-type FontSize = "small" | "medium" | "large" | "xlarge";
-type FontFamily = "serif" | "sans";
-type LineSpacing = "tight" | "normal" | "relaxed" | "loose";
 
 type BibleBook = { id: string; name: string };
 type BibleChapter = { id: string; number: number };
-type BibleVerse = { reference: string; text: string; verse: number };
 type BibleProgress = { translation: Translation; bookId: string; chapterId: string; verse: number };
-type BibleHighlight = {
-  id: string;
-  verseStart: number;
-  verseEnd: number;
-  color: string;
-};
 type BibleNote = {
   id: string;
   verseStart: number;
@@ -45,29 +49,6 @@ type BibleBootstrap = {
   selectedChapterId: string;
   verses: BibleVerse[];
   progress?: BibleProgress | null;
-};
-
-const FONT_SIZE_CLASSES: Record<FontSize, string> = {
-  small: "text-sm",
-  medium: "text-base",
-  large: "text-lg",
-  xlarge: "text-xl",
-};
-const FONT_FAMILY_CLASSES: Record<FontFamily, string> = {
-  serif: "font-serif",
-  sans: "font-sans",
-};
-const LINE_SPACING_CLASSES: Record<LineSpacing, string> = {
-  tight: "leading-snug",
-  normal: "leading-relaxed",
-  relaxed: "leading-loose",
-  loose: "leading-[2.2]",
-};
-const FONT_SIZE_LABELS: Record<FontSize, string> = {
-  small: "S",
-  medium: "M",
-  large: "L",
-  xlarge: "XL",
 };
 
 const BIBLE_BOOTSTRAP_QUERY = gql`
@@ -189,6 +170,7 @@ export default function BiblePage() {
   const [notes, setNotes] = useState<BibleNote[]>([]);
   const [selectedVerses, setSelectedVerses] = useState<number[]>([]);
   const [selectionAnchor, setSelectionAnchor] = useState<number | null>(null);
+  const [selectedHighlightColor, setSelectedHighlightColor] = useState<HighlightColor>("gold");
   const [isCreatingNote, setIsCreatingNote] = useState(false);
   const [noteDraft, setNoteDraft] = useState("");
   const [toast, setToast] = useState<string | null>(null);
@@ -424,17 +406,7 @@ export default function BiblePage() {
     });
   }, [chapterIndex, chapters, translation, bookId, loadBibleBootstrap]);
 
-  const selectedRange = useMemo(() => {
-    if (selectedVerses.length === 0) return null;
-    const sorted = [...selectedVerses].sort((a, b) => a - b);
-    return { start: sorted[0], end: sorted[sorted.length - 1] };
-  }, [selectedVerses]);
-
-  const isVerseHighlighted = useCallback(
-    (verseNumber: number) =>
-      highlights.some((h) => verseNumber >= h.verseStart && verseNumber <= h.verseEnd),
-    [highlights]
-  );
+  const selectedRange = useMemo(() => getSelectedRange(selectedVerses), [selectedVerses]);
 
   const handleSelectVerse = (verseNumber: number, shiftKey: boolean) => {
     setSelectedVerses((prev) => {
@@ -456,10 +428,7 @@ export default function BiblePage() {
 
   const handleCopySelected = async () => {
     if (!selectedRange) return;
-    const selectedTexts = verses
-      .filter((v) => v.verse >= selectedRange.start && v.verse <= selectedRange.end)
-      .map((v) => `${v.reference} ${v.text}`)
-      .join("\n");
+    const selectedTexts = buildSelectedCopyText(verses, selectedRange);
     try {
       await navigator.clipboard.writeText(selectedTexts);
       setToast(
@@ -472,7 +441,7 @@ export default function BiblePage() {
     }
   };
 
-  const handleSaveHighlight = async () => {
+  const handleSaveHighlight = async (colorOverride?: HighlightColor) => {
     if (!selectedRange) return;
     try {
       const token = await getAccessToken();
@@ -492,7 +461,7 @@ export default function BiblePage() {
             chapterId,
             verseStart: selectedRange.start,
             verseEnd: selectedRange.end,
-            color: "gold",
+            color: colorOverride ?? selectedHighlightColor,
           },
         },
         context: { headers: { Authorization: `Bearer ${token}` } },
@@ -501,6 +470,8 @@ export default function BiblePage() {
       if (saved) {
         setHighlights((prev) => [...prev.filter((h) => h.id !== saved.id), saved]);
         setToast("Highlight saved");
+        setSelectedVerses([]);
+        setSelectionAnchor(null);
       }
     } catch {
       setToast("Unable to save highlight");
@@ -564,12 +535,7 @@ export default function BiblePage() {
     })();
   };
 
-  const verseTextClasses = cn(
-    "text-ink dark:text-parchment",
-    FONT_SIZE_CLASSES[fontSize],
-    FONT_FAMILY_CLASSES[fontFamily],
-    LINE_SPACING_CLASSES[lineSpacing]
-  );
+  const verseTextClasses = buildVerseTextClasses({ fontSize, fontFamily, lineSpacing });
 
   const chapterLabel = `${selectedBook?.name ?? "Bible"} ${selectedChapter?.number ?? ""}`;
 
@@ -628,53 +594,7 @@ export default function BiblePage() {
             ) : null}
           </AnimatePresence>
 
-          <div className="px-5 py-6">
-            {selectedRange ? (
-              <div className="sticky top-2 z-20 mb-3 rounded-xl border border-gold/20 bg-white/95 dark:bg-dark-card/95 backdrop-blur px-3 py-2">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs text-muted">
-                    {selectedRange.start === selectedRange.end
-                      ? `Verse ${selectedRange.start} selected`
-                      : `Verses ${selectedRange.start}-${selectedRange.end} selected`}
-                  </p>
-                  <button
-                    onClick={() => {
-                      setSelectedVerses([]);
-                      setSelectionAnchor(null);
-                    }}
-                    className="text-xs text-muted hover:text-ink dark:hover:text-parchment"
-                  >
-                    Clear
-                  </button>
-                </div>
-                <div className="mt-2 flex items-center gap-2">
-                  <button
-                    onClick={handleCopySelected}
-                    className="inline-flex items-center gap-1 text-xs font-medium text-muted hover:text-ink dark:hover:text-parchment bg-white dark:bg-dark-card border border-gold/10 rounded-lg px-2.5 py-1.5 transition-colors"
-                  >
-                    <Copy className="w-3.5 h-3.5" />
-                    Copy
-                  </button>
-                  <button
-                    onClick={handleSaveHighlight}
-                    className="inline-flex items-center gap-1 text-xs font-medium text-muted hover:text-ink dark:hover:text-parchment bg-white dark:bg-dark-card border border-gold/10 rounded-lg px-2.5 py-1.5 transition-colors"
-                  >
-                    <Highlighter className="w-3.5 h-3.5" />
-                    Highlight
-                  </button>
-                  <button
-                    onClick={() => {
-                      setIsNotesOpen(true);
-                      setIsCreatingNote(true);
-                    }}
-                    className="inline-flex items-center gap-1 text-xs font-medium text-muted hover:text-ink dark:hover:text-parchment bg-white dark:bg-dark-card border border-gold/10 rounded-lg px-2.5 py-1.5 transition-colors"
-                  >
-                    <MessageSquare className="w-3.5 h-3.5" />
-                    Note
-                  </button>
-                </div>
-              </div>
-            ) : null}
+          <div className={cn("px-5 py-6", selectedRange ? "pb-28" : "")}>
             {error ? (
               <p className="text-xs text-red-600 text-center">{error}</p>
             ) : isLoading ? (
@@ -692,7 +612,7 @@ export default function BiblePage() {
                 >
                   {verses.map((verse, idx) => {
                     const isActive = selectedVerses.includes(verse.verse);
-                    const isHighlighted = isVerseHighlighted(verse.verse);
+                    const highlightTextClass = getVerseHighlightTextClass(verse.verse, highlights);
                     return (
                       <motion.div
                         key={verse.reference}
@@ -706,15 +626,13 @@ export default function BiblePage() {
                           className={cn(
                             "relative rounded-xl px-3 pt-2 pb-5 -mx-1 transition-colors",
                             isActive
-                              ? "bg-gold/[0.09] dark:bg-gold/[0.16]"
-                              : isHighlighted
-                                ? "bg-gold/[0.06] dark:bg-gold/[0.12]"
-                                : "hover:bg-gold/[0.04]"
+                              ? "ring-1 ring-gold/35 bg-gold/[0.03] dark:bg-gold/[0.07]"
+                              : "hover:bg-gold/[0.04]"
                           )}
                         >
                           <p className={verseTextClasses}>
                             <sup className="text-gold font-bold text-[0.65em] mr-1 select-none">{verse.verse}</sup>
-                            {verse.text}
+                            <span className={cn("rounded px-0.5", highlightTextClass)}>{verse.text}</span>
                           </p>
                         </div>
                       </motion.div>
@@ -728,6 +646,87 @@ export default function BiblePage() {
           </div>
         </main>
       </div>
+
+      <AnimatePresence>
+        {selectedRange ? (
+          <motion.div
+            initial={{ opacity: 0, y: 28, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.98 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="fixed bottom-4 inset-x-0 z-[60] px-4"
+          >
+            <div className="mx-auto w-full max-w-[430px] rounded-2xl border border-gold/25 bg-white/95 dark:bg-dark-card/95 backdrop-blur-md shadow-lg px-3.5 py-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm text-muted">
+                  {selectedRange.start === selectedRange.end
+                    ? `Verse ${selectedRange.start} selected`
+                    : `Verses ${selectedRange.start}-${selectedRange.end} selected`}
+                </p>
+                <button
+                  onClick={() => {
+                    setSelectedVerses([]);
+                    setSelectionAnchor(null);
+                  }}
+                  className="text-sm text-muted hover:text-ink dark:hover:text-parchment transition-colors"
+                >
+                  Clear
+                </button>
+              </div>
+              <div className="mt-3 flex items-center gap-2">
+                <button
+                  onClick={handleCopySelected}
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-ink dark:text-parchment bg-white dark:bg-dark-card border border-gold/15 rounded-xl px-3 py-2 transition-colors hover:bg-gold/[0.06]"
+                >
+                  <Copy className="w-4 h-4" />
+                  Copy
+                </button>
+                <button
+                  onClick={() => void handleSaveHighlight()}
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-ink dark:text-parchment bg-white dark:bg-dark-card border border-gold/15 rounded-xl px-3 py-2 transition-colors hover:bg-gold/[0.06]"
+                >
+                  <Highlighter className="w-4 h-4" />
+                  Highlight
+                </button>
+                <button
+                  onClick={() => {
+                    setIsNotesOpen(true);
+                    setIsCreatingNote(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-ink dark:text-parchment bg-white dark:bg-dark-card border border-gold/15 rounded-xl px-3 py-2 transition-colors hover:bg-gold/[0.06]"
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  Note
+                </button>
+              </div>
+              <div className="mt-2.5 flex items-center gap-2">
+                <p className="text-[11px] text-muted">Color</p>
+                <div className="flex items-center gap-1.5">
+                  {HIGHLIGHT_COLORS.map((color) => (
+                    <button
+                      key={color.key}
+                      onClick={() => {
+                        setSelectedHighlightColor(color.key);
+                        if (selectedRange) {
+                          void handleSaveHighlight(color.key);
+                        }
+                      }}
+                      aria-label={`Highlight color ${color.key}`}
+                      className={cn(
+                        "w-5 h-5 rounded-full border transition-all",
+                        color.chipClass,
+                        selectedHighlightColor === color.key
+                          ? "border-ink dark:border-parchment ring-2 ring-gold/35"
+                          : "border-white/80 dark:border-dark-bg"
+                      )}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       {isNavSheetOpen ? (
         <div className="fixed inset-0 z-[70]" onClick={() => setIsNavSheetOpen(false)}>
