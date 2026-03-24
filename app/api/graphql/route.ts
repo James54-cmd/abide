@@ -8,6 +8,7 @@ import {
   normalizeText,
   toItemArray,
 } from "@/lib/server/api-bible";
+import { getSiteUrl, getSupabasePublicEnv } from "@/lib/env";
 import { getSafeAuthRedirectUrl } from "@/lib/auth/redirect";
 import { requireUserFromAuthHeader } from "@/lib/server/supabase-admin";
 
@@ -248,17 +249,18 @@ const resolvers = {
         };
       }
     ) => {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-      if (!supabaseUrl || !supabaseAnonKey) {
-        throw new Error("Supabase env vars are missing.");
-      }
-
-      const supabase = createClient(supabaseUrl, supabaseAnonKey);
+      const { url, anonKey } = getSupabasePublicEnv();
+      const supabase = createClient(url, anonKey);
       const { fullName, email, password, redirectTo } = args.input;
+      let siteUrl: string | null = null;
+      try {
+        siteUrl = getSiteUrl();
+      } catch {
+        siteUrl = null;
+      }
       const safeRedirectTo = getSafeAuthRedirectUrl({
         requestedRedirectTo: redirectTo,
-        siteUrl: process.env.NEXT_PUBLIC_SITE_URL,
+        siteUrl,
       });
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -291,13 +293,8 @@ const resolvers = {
         };
       }
     ) => {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-      if (!supabaseUrl || !supabaseAnonKey) {
-        throw new Error("Supabase env vars are missing.");
-      }
-
-      const supabase = createClient(supabaseUrl, supabaseAnonKey);
+      const { url, anonKey } = getSupabasePublicEnv();
+      const supabase = createClient(url, anonKey);
       const { data, error } = await supabase.auth.signInWithPassword(args.input);
 
       if (error) {
