@@ -3,10 +3,12 @@ import { startServerAndCreateNextHandler } from "@as-integrations/next";
 import { createClient } from "@supabase/supabase-js";
 import type { NextRequest } from "next/server";
 import {
-  apiBibleGet,
+  apiBibleGetCached,
   getBibleIdForTranslation,
+  mapBibleBooksData,
+  mapBibleChaptersData,
+  mapVersesFromVerseList,
   normalizeText,
-  toItemArray,
 } from "@/lib/server/api-bible";
 import { getSafeAuthRedirectUrl } from "@/lib/auth/redirect";
 import { generateEncouragementForUser } from "@/lib/server/chat-generation";
@@ -19,6 +21,14 @@ type GraphQlContext = {
 };
 
 const DEFAULT_TRANSLATION: Translation = "NIV";
+
+async function safeFetchChaptersForBook(bibleId: string, bookId: string): Promise<unknown | null> {
+  try {
+    return await apiBibleGetCached(`/v1/bibles/${bibleId}/books/${bookId}/chapters`);
+  } catch {
+    return null;
+  }
+}
 
 function splitChapterIntoVerses(rawText: string, chapterId: string) {
   const text = normalizeText(rawText);
@@ -96,6 +106,16 @@ const typeDefs = `
     updatedAt: String
   }
 
+  type BibleBootstrapPayload {
+    translation: String!
+    books: [BibleBook!]!
+    selectedBookId: String!
+    chapters: [BibleChapter!]!
+    selectedChapterId: String!
+    verses: [BibleVerse!]!
+    progress: BibleProgress
+  }
+
   type ChatConversation {
     id: String!
     title: String!
@@ -149,10 +169,11 @@ const typeDefs = `
 
   type Query {
     health: String!
-    bibleBooks(translation: String): [BibleBook!]!
-    bibleChapters(translation: String, bookId: String!): [BibleChapter!]!
-    bibleVerses(translation: String, chapterId: String!): [BibleVerse!]!
-    bibleProgress: BibleProgress
+    bibleBootstrap(
+      translation: String
+      preferredBookId: String
+      preferredChapterId: String
+    ): BibleBootstrapPayload!
     chatConversations: [ChatConversation!]!
     chatMessages(conversationId: String!): [ChatMessage!]!
   }
@@ -161,119 +182,150 @@ const typeDefs = `
 const resolvers = {
   Query: {
     health: () => "ok",
-    bibleBooks: async (
+    bibleBootstrap: async (
       _: unknown,
-      args: { translation?: string }
-    ) => {
-      const translation = (args.translation?.toUpperCase() as Translation) || DEFAULT_TRANSLATION;
-      if (!["NIV", "NLT"].includes(translation)) {
-        throw new Error("Invalid translation.");
-      }
-
-      const bibleId = getBibleIdForTranslation(translation);
-      const booksData = await apiBibleGet(`/v1/bibles/${bibleId}/books`);
-      return toItemArray(booksData)
-        .map((item) => ({
-          id: String(item.id ?? ""),
-          name: String(item.name ?? ""),
-        }))
-        .filter((item) => item.id && item.name);
-    },
-    bibleChapters: async (
-      _: unknown,
-      args: { translation?: string; bookId: string }
-    ) => {
-      const translation = (args.translation?.toUpperCase() as Translation) || DEFAULT_TRANSLATION;
-      if (!["NIV", "NLT"].includes(translation)) {
-        throw new Error("Invalid translation.");
-      }
-      if (!args.bookId?.trim()) {
-        throw new Error("bookId is required.");
-      }
-
-      const bibleId = getBibleIdForTranslation(translation);
-      const chaptersData = await apiBibleGet(`/v1/bibles/${bibleId}/books/${args.bookId}/chapters`);
-      return toItemArray(chaptersData)
-        .map((item) => {
-          const id = String(item.id ?? "");
-          const rawNumber = item.number ?? item.chapter ?? null;
-          const numberFromField =
-            typeof rawNumber === "string" || typeof rawNumber === "number"
-              ? Number(rawNumber)
-              : NaN;
-          const numberFromId = Number(id.split(".").pop());
-          const number = Number.isFinite(numberFromField) ? numberFromField : numberFromId;
-          return { id, number };
-        })
-        .filter((item) => item.id && Number.isFinite(item.number))
-        .sort((a, b) => a.number - b.number);
-    },
-    bibleVerses: async (
-      _: unknown,
-      args: { translation?: string; chapterId: string }
-    ) => {
-      const translation = (args.translation?.toUpperCase() as Translation) || DEFAULT_TRANSLATION;
-      if (!["NIV", "NLT"].includes(translation)) {
-        throw new Error("Invalid translation.");
-      }
-      if (!args.chapterId?.trim()) {
-        throw new Error("chapterId is required.");
-      }
-
-      const bibleId = getBibleIdForTranslation(translation);
-      const chapterId = args.chapterId.trim();
-
-      const versesData = await apiBibleGet(`/v1/bibles/${bibleId}/chapters/${chapterId}/verses`);
-      const verseList = toItemArray(versesData);
-
-      const versesWithText = verseList
-        .map((item, index) => {
-          const reference = String(item.reference ?? "");
-          const text = normalizeText(item.content ?? item.text ?? "");
-          const num = Number(item.verse ?? item.number ?? item.orgId ?? index + 1);
-          const numFromRef = Number(reference.split(":").pop());
-          const verse = Number.isFinite(num)
-            ? num
-            : Number.isFinite(numFromRef)
-              ? numFromRef
-              : index + 1;
-          return { reference: reference || `${chapterId}:${verse}`, text, verse };
-        })
-        .filter((v) => v.text.length > 0);
-
-      if (versesWithText.length > 1) {
-        return versesWithText;
-      }
-
-      const chapterData = (await apiBibleGet(
-        `/v1/bibles/${bibleId}/chapters/${chapterId}?content-type=text`
-      )) as Record<string, unknown>;
-      const chapterText = String(chapterData.content ?? "");
-      return splitChapterIntoVerses(chapterText, chapterId);
-    },
-    bibleProgress: async (
-      _: unknown,
-      __: unknown,
+      args: {
+        translation?: string;
+        preferredBookId?: string | null;
+        preferredChapterId?: string | null;
+      },
       context: GraphQlContext
     ) => {
-      const { user, supabase } = await requireUserFromAuthHeader(context.authHeader);
-      const { data, error } = await supabase
-        .from("bible_reading_progress")
-        .select("translation,book_id,chapter_id,verse,updated_at")
-        .eq("user_id", user.id)
-        .single();
-
-      if (error && error.code !== "PGRST116") {
-        throw error;
+      const requestedTranslation =
+        (args.translation?.toUpperCase() as Translation | undefined) || DEFAULT_TRANSLATION;
+      if (!["NIV", "NLT"].includes(requestedTranslation)) {
+        throw new Error("Invalid translation.");
       }
-      if (!data) return null;
+
+      let progress: {
+        translation: Translation;
+        bookId: string;
+        chapterId: string;
+        verse: number;
+        updatedAt?: string | null;
+      } | null = null;
+
+      try {
+        const { user, supabase } = await requireUserFromAuthHeader(context.authHeader);
+        const { data, error } = await supabase
+          .from("bible_reading_progress")
+          .select("translation,book_id,chapter_id,verse,updated_at")
+          .eq("user_id", user.id)
+          .single();
+
+        if (error && error.code !== "PGRST116") {
+          throw error;
+        }
+
+        if (data && (data.translation === "NIV" || data.translation === "NLT")) {
+          progress = {
+            translation: data.translation,
+            bookId: data.book_id,
+            chapterId: data.chapter_id,
+            verse: data.verse,
+            updatedAt: data.updated_at,
+          };
+        }
+      } catch {
+        // Unauthenticated requests still return bootstrap payload using preferred params.
+      }
+
+      const translation = requestedTranslation;
+      const progressForTranslation =
+        progress && progress.translation === translation ? progress : null;
+
+      const argBook = args.preferredBookId?.trim() || "";
+      const preferredBookId =
+        argBook || progressForTranslation?.bookId || "";
+
+      const bibleId = getBibleIdForTranslation(translation);
+
+      const [booksData, earlyChaptersData] = await Promise.all([
+        apiBibleGetCached(`/v1/bibles/${bibleId}/books`),
+        preferredBookId ? safeFetchChaptersForBook(bibleId, preferredBookId) : Promise.resolve(null),
+      ]);
+
+      const books = mapBibleBooksData(booksData);
+
+      const selectedBookId =
+        books.find((book) => book.id === preferredBookId)?.id ?? books[0]?.id ?? "";
+
+      if (!selectedBookId) {
+        return {
+          translation,
+          books: [],
+          selectedBookId: "",
+          chapters: [],
+          selectedChapterId: "",
+          verses: [],
+          progress: progress
+            ? {
+                translation: progress.translation,
+                bookId: progress.bookId,
+                chapterId: progress.chapterId,
+                verse: progress.verse,
+                updatedAt: progress.updatedAt ?? null,
+              }
+            : null,
+        };
+      }
+
+      let chapters = mapBibleChaptersData(
+        selectedBookId === preferredBookId && earlyChaptersData !== null
+          ? earlyChaptersData
+          : await apiBibleGetCached(`/v1/bibles/${bibleId}/books/${selectedBookId}/chapters`)
+      );
+
+      const argChapter = args.preferredChapterId?.trim() || "";
+      const chapterFromProgress =
+        progressForTranslation && progressForTranslation.bookId === selectedBookId
+          ? progressForTranslation.chapterId
+          : "";
+      const preferredChapterId = argChapter || chapterFromProgress || "";
+
+      const selectedChapterId =
+        chapters.find((chapter) => chapter.id === preferredChapterId)?.id ??
+        chapters[0]?.id ??
+        "";
+
+      let verses: { reference: string; text: string; verse: number }[] = [];
+      if (selectedChapterId) {
+        const versesData = await apiBibleGetCached(
+          `/v1/bibles/${bibleId}/chapters/${selectedChapterId}/verses`
+        );
+        const versesWithText = mapVersesFromVerseList(versesData, selectedChapterId);
+
+        verses =
+          versesWithText.length > 1
+            ? versesWithText
+            : splitChapterIntoVerses(
+                String(
+                  (
+                    (await apiBibleGetCached(
+                      `/v1/bibles/${bibleId}/chapters/${selectedChapterId}?content-type=text`
+                    )) as Record<string, unknown>
+                  ).content ?? ""
+                ),
+                selectedChapterId
+              );
+      }
 
       return {
-        translation: data.translation,
-        bookId: data.book_id,
-        chapterId: data.chapter_id,
-        verse: data.verse,
-        updatedAt: data.updated_at,
+        translation,
+        books,
+        selectedBookId,
+        chapters,
+        selectedChapterId,
+        verses,
+        progress: progress
+          ? {
+              translation: progress.translation,
+              bookId: progress.bookId,
+              chapterId: progress.chapterId,
+              verse: progress.verse,
+              updatedAt: progress.updatedAt ?? null,
+            }
+          : null,
       };
     },
     chatConversations: async (

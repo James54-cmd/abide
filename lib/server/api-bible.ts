@@ -43,6 +43,73 @@ export async function apiBibleGet(path: string) {
   return payload.data;
 }
 
+export const BIBLE_API_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+type BibleCacheEntry = { expiresAt: number; value: unknown };
+
+const bibleResponseCache = new Map<string, BibleCacheEntry>();
+
+export async function apiBibleGetCached(
+  path: string,
+  ttlMs: number = BIBLE_API_CACHE_TTL_MS
+): Promise<unknown> {
+  const now = Date.now();
+  const hit = bibleResponseCache.get(path);
+  if (hit && hit.expiresAt > now) {
+    return hit.value;
+  }
+  const value = await apiBibleGet(path);
+  bibleResponseCache.set(path, { expiresAt: now + ttlMs, value });
+  return value;
+}
+
+export type BibleBookRow = { id: string; name: string };
+export type BibleChapterRow = { id: string; number: number };
+export type BibleVerseRow = { reference: string; text: string; verse: number };
+
+export function mapBibleBooksData(booksData: unknown): BibleBookRow[] {
+  return toItemArray(booksData)
+    .map((item) => ({
+      id: String(item.id ?? ""),
+      name: String(item.name ?? ""),
+    }))
+    .filter((item) => item.id && item.name);
+}
+
+export function mapBibleChaptersData(chaptersData: unknown): BibleChapterRow[] {
+  return toItemArray(chaptersData)
+    .map((item) => {
+      const id = String(item.id ?? "");
+      const rawNumber = item.number ?? item.chapter ?? null;
+      const numberFromField =
+        typeof rawNumber === "string" || typeof rawNumber === "number"
+          ? Number(rawNumber)
+          : NaN;
+      const numberFromId = Number(id.split(".").pop());
+      const number = Number.isFinite(numberFromField) ? numberFromField : numberFromId;
+      return { id, number };
+    })
+    .filter((item) => item.id && Number.isFinite(item.number))
+    .sort((a, b) => a.number - b.number);
+}
+
+export function mapVersesFromVerseList(verseListRaw: unknown, chapterId: string): BibleVerseRow[] {
+  return toItemArray(verseListRaw)
+    .map((item, index) => {
+      const reference = String(item.reference ?? "");
+      const text = normalizeText(item.content ?? item.text ?? "");
+      const num = Number(item.verse ?? item.number ?? item.orgId ?? index + 1);
+      const numFromRef = Number(reference.split(":").pop());
+      const verse = Number.isFinite(num)
+        ? num
+        : Number.isFinite(numFromRef)
+          ? numFromRef
+          : index + 1;
+      return { reference: reference || `${chapterId}:${verse}`, text, verse };
+    })
+    .filter((v) => v.text.length > 0);
+}
+
 export function normalizeText(input: unknown) {
   if (typeof input !== "string") return "";
   return input

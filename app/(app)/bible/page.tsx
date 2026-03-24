@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { gql } from "@apollo/client";
 import { Copy, MessageSquare, X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -25,6 +25,15 @@ type BibleChapter = { id: string; number: number };
 type BibleVerse = { reference: string; text: string; verse: number };
 type Note = { id: string; verseReference: string; content: string; timestamp: string };
 type BibleProgress = { translation: Translation; bookId: string; chapterId: string; verse: number };
+type BibleBootstrap = {
+  translation: Translation;
+  books: BibleBook[];
+  selectedBookId: string;
+  chapters: BibleChapter[];
+  selectedChapterId: string;
+  verses: BibleVerse[];
+  progress?: BibleProgress | null;
+};
 
 const FONT_SIZE_CLASSES: Record<FontSize, string> = {
   small: "text-sm",
@@ -49,41 +58,39 @@ const FONT_SIZE_LABELS: Record<FontSize, string> = {
   xlarge: "XL",
 };
 
-const BIBLE_BOOKS_QUERY = gql`
-  query BibleBooks($translation: String) {
-    bibleBooks(translation: $translation) {
-      id
-      name
-    }
-  }
-`;
-
-const BIBLE_CHAPTERS_QUERY = gql`
-  query BibleChapters($translation: String, $bookId: String!) {
-    bibleChapters(translation: $translation, bookId: $bookId) {
-      id
-      number
-    }
-  }
-`;
-
-const BIBLE_VERSES_QUERY = gql`
-  query BibleVerses($translation: String, $chapterId: String!) {
-    bibleVerses(translation: $translation, chapterId: $chapterId) {
-      reference
-      text
-      verse
-    }
-  }
-`;
-
-const BIBLE_PROGRESS_QUERY = gql`
-  query BibleProgress {
-    bibleProgress {
+const BIBLE_BOOTSTRAP_QUERY = gql`
+  query BibleBootstrap(
+    $translation: String
+    $preferredBookId: String
+    $preferredChapterId: String
+  ) {
+    bibleBootstrap(
+      translation: $translation
+      preferredBookId: $preferredBookId
+      preferredChapterId: $preferredChapterId
+    ) {
       translation
-      bookId
-      chapterId
-      verse
+      books {
+        id
+        name
+      }
+      selectedBookId
+      chapters {
+        id
+        number
+      }
+      selectedChapterId
+      verses {
+        reference
+        text
+        verse
+      }
+      progress {
+        translation
+        bookId
+        chapterId
+        verse
+      }
     }
   }
 `;
@@ -98,6 +105,9 @@ const SAVE_BIBLE_PROGRESS_MUTATION = gql`
     }
   }
 `;
+
+/** Dedupes save mutation when React Strict Mode double-invokes effects (dev). */
+let lastServerSavedProgressKey: string | null = null;
 
 export default function BiblePage() {
   const [translation, setTranslation] = useState<Translation>("NIV");
@@ -120,7 +130,6 @@ export default function BiblePage() {
   const [noteDraft, setNoteDraft] = useState("");
   const [toast, setToast] = useState<string | null>(null);
   const [isBootstrapped, setIsBootstrapped] = useState(false);
-  const initialProgressRef = useRef<BibleProgress | null>(null);
 
   const selectedBook = useMemo(() => books.find((b) => b.id === bookId) ?? null, [books, bookId]);
   const selectedChapter = useMemo(() => chapters.find((c) => c.id === chapterId) ?? null, [chapters, chapterId]);
@@ -133,155 +142,112 @@ export default function BiblePage() {
     return data.session.access_token;
   }, []);
 
-  useEffect(() => {
-    const loadProgress = async () => {
-      let progress: BibleProgress | null = null;
-      try {
-        const raw = window.localStorage.getItem("abide_bible_progress");
-        if (raw) {
-          const parsed = JSON.parse(raw) as Partial<BibleProgress>;
-          if (
-            (parsed.translation === "NIV" || parsed.translation === "NLT") &&
-            parsed.bookId &&
-            parsed.chapterId
-          ) {
-            progress = {
-              translation: parsed.translation,
-              bookId: parsed.bookId,
-              chapterId: parsed.chapterId,
-              verse:
-                typeof parsed.verse === "number" && Number.isFinite(parsed.verse) && parsed.verse > 0
-                  ? Math.floor(parsed.verse)
-                  : 1,
-            };
-          }
-        }
-      } catch {}
-
+  const loadBibleBootstrap = useCallback(
+    async (args: {
+      translation: Translation;
+      preferredBookId: string | null;
+      preferredChapterId: string | null;
+      signal?: AbortSignal;
+      restoreVerse?: boolean;
+      localVerseHint?: number | null;
+    }) => {
+      setError(null);
+      setIsLoading(true);
       try {
         const token = await getAccessToken();
-        if (token) {
-          const client = getApolloClient();
-          const { data } = await client.query<{
-            bibleProgress?: Partial<BibleProgress> | null;
-          }>({
-            query: BIBLE_PROGRESS_QUERY,
-            fetchPolicy: "no-cache",
-            context: { headers: { Authorization: `Bearer ${token}` } },
-          });
-          const server = data?.bibleProgress ?? null;
-          if (
-            server &&
-            (server.translation === "NIV" || server.translation === "NLT") &&
-            typeof server.bookId === "string" &&
-            typeof server.chapterId === "string"
-          ) {
-            progress = {
-              translation: server.translation,
-              bookId: server.bookId,
-              chapterId: server.chapterId,
-              verse:
-                typeof server.verse === "number" && Number.isFinite(server.verse) && server.verse > 0
-                  ? Math.floor(server.verse)
-                  : 1,
-            };
-          }
-        }
-      } catch {
-      } finally {
-        if (progress) {
-          initialProgressRef.current = progress;
-          setTranslation(progress.translation);
-        }
-        setIsBootstrapped(true);
-      }
-    };
-
-    void loadProgress();
-  }, [getAccessToken]);
-
-  useEffect(() => {
-    if (!isBootstrapped) return;
-    const loadBooks = async () => {
-      setError(null);
-      const client = getApolloClient();
-      const { data = {} } = await client.query<{ bibleBooks?: BibleBook[] }>({
-        query: BIBLE_BOOKS_QUERY,
-        variables: { translation },
-        fetchPolicy: "no-cache",
-      });
-      const list = data.bibleBooks ?? [];
-      setBooks(list);
-      const progress = initialProgressRef.current;
-      const preferredBookId =
-        progress?.translation === translation &&
-        list.some((book) => book.id === progress.bookId)
-          ? progress.bookId
-          : "";
-      setBookId(preferredBookId || list[0]?.id || "");
-      setChapterId("");
-      setVerses([]);
-    };
-    loadBooks().catch((err) => setError(err instanceof Error ? err.message : "Unknown error."));
-  }, [translation, isBootstrapped]);
-
-  useEffect(() => {
-    if (!bookId) return;
-    const loadChapters = async () => {
-      setError(null);
-      const client = getApolloClient();
-      const { data = {} } = await client.query<{ bibleChapters?: BibleChapter[] }>({
-        query: BIBLE_CHAPTERS_QUERY,
-        variables: { translation, bookId },
-        fetchPolicy: "no-cache",
-      });
-      const list = data.bibleChapters ?? [];
-      setChapters(list);
-      const progress = initialProgressRef.current;
-      const preferredChapterId =
-        progress?.translation === translation &&
-        progress.bookId === bookId &&
-        list.some((chapter) => chapter.id === progress.chapterId)
-          ? progress.chapterId
-          : "";
-      setChapterId(preferredChapterId || list[0]?.id || "");
-      setVerses([]);
-    };
-    loadChapters().catch((err) => setError(err instanceof Error ? err.message : "Unknown error."));
-  }, [translation, bookId]);
-
-  useEffect(() => {
-    if (!chapterId) return;
-    const loadVerses = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
+        if (args.signal?.aborted) return;
         const client = getApolloClient();
-        const { data = {} } = await client.query<{ bibleVerses?: BibleVerse[] }>({
-          query: BIBLE_VERSES_QUERY,
-          variables: { translation, chapterId },
+        const { data } = await client.query<{ bibleBootstrap: BibleBootstrap }>({
+          query: BIBLE_BOOTSTRAP_QUERY,
+          variables: {
+            translation: args.translation,
+            preferredBookId: args.preferredBookId,
+            preferredChapterId: args.preferredChapterId,
+          },
           fetchPolicy: "no-cache",
+          context: {
+            ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}),
+            ...(args.signal ? { fetchOptions: { signal: args.signal } } : {}),
+          },
         });
-        const loadedVerses = data.bibleVerses ?? [];
-        setVerses(loadedVerses);
-        const progress = initialProgressRef.current;
-        if (
-          progress?.translation === translation &&
-          progress.bookId === bookId &&
-          progress.chapterId === chapterId
-        ) {
-          const matched = loadedVerses.find((v) => v.verse === progress.verse);
-          setActiveVerseId(matched?.reference ?? null);
-          initialProgressRef.current = null;
+        if (args.signal?.aborted) return;
+
+        const payload = data?.bibleBootstrap;
+        if (!payload) {
+          throw new Error("Unable to bootstrap Bible data.");
+        }
+
+        setTranslation(payload.translation);
+        setBooks(payload.books);
+        setBookId(payload.selectedBookId);
+        setChapters(payload.chapters);
+        setChapterId(payload.selectedChapterId);
+        setVerses(payload.verses);
+
+        if (args.restoreVerse) {
+          const verseNum =
+            typeof args.localVerseHint === "number" && Number.isFinite(args.localVerseHint)
+              ? args.localVerseHint
+              : payload.progress?.verse ?? null;
+          if (typeof verseNum === "number" && Number.isFinite(verseNum)) {
+            const matched = payload.verses.find((v) => v.verse === verseNum);
+            setActiveVerseId(matched?.reference ?? null);
+          } else {
+            setActiveVerseId(null);
+          }
         } else {
           setActiveVerseId(null);
         }
+      } catch (err) {
+        if (args.signal?.aborted) return;
+        setError(err instanceof Error ? err.message : "Unknown error.");
       } finally {
-        setIsLoading(false);
+        if (!args.signal?.aborted) {
+          setIsLoading(false);
+          setIsBootstrapped(true);
+        }
       }
-    };
-    loadVerses().catch((err) => setError(err instanceof Error ? err.message : "Unknown error."));
-  }, [translation, bookId, chapterId]);
+    },
+    [getAccessToken]
+  );
+
+  useEffect(() => {
+    const abortController = new AbortController();
+
+    let localProgress: BibleProgress | null = null;
+    try {
+      const raw = window.localStorage.getItem("abide_bible_progress");
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<BibleProgress>;
+        if (
+          (parsed.translation === "NIV" || parsed.translation === "NLT") &&
+          typeof parsed.bookId === "string" &&
+          typeof parsed.chapterId === "string"
+        ) {
+          localProgress = {
+            translation: parsed.translation,
+            bookId: parsed.bookId,
+            chapterId: parsed.chapterId,
+            verse:
+              typeof parsed.verse === "number" && Number.isFinite(parsed.verse) && parsed.verse > 0
+                ? Math.floor(parsed.verse)
+                : 1,
+          };
+        }
+      }
+    } catch {}
+
+    void loadBibleBootstrap({
+      translation: localProgress?.translation ?? "NIV",
+      preferredBookId: localProgress?.bookId ?? null,
+      preferredChapterId: localProgress?.chapterId ?? null,
+      signal: abortController.signal,
+      restoreVerse: true,
+      localVerseHint: localProgress?.verse ?? null,
+    });
+
+    return () => abortController.abort();
+  }, [loadBibleBootstrap]);
 
   useEffect(() => {
     try {
@@ -319,6 +285,10 @@ export default function BiblePage() {
 
     window.localStorage.setItem("abide_bible_progress", JSON.stringify(progress));
 
+    const saveKey = `${progress.translation}|${progress.bookId}|${progress.chapterId}|${progress.verse}`;
+    if (lastServerSavedProgressKey === saveKey) return;
+    lastServerSavedProgressKey = saveKey;
+
     void (async () => {
       try {
         const token = await getAccessToken();
@@ -332,6 +302,7 @@ export default function BiblePage() {
           context: { headers: { Authorization: `Bearer ${token}` } },
         });
       } catch {
+        lastServerSavedProgressKey = null;
         // Silent fallback to local storage.
       }
     })();
@@ -344,11 +315,24 @@ export default function BiblePage() {
   }, [toast]);
 
   const handlePrev = useCallback(() => {
-    if (chapterIndex > 0) setChapterId(chapters[chapterIndex - 1].id);
-  }, [chapterIndex, chapters]);
+    if (chapterIndex <= 0) return;
+    const prevId = chapters[chapterIndex - 1].id;
+    void loadBibleBootstrap({
+      translation,
+      preferredBookId: bookId,
+      preferredChapterId: prevId,
+    });
+  }, [chapterIndex, chapters, translation, bookId, loadBibleBootstrap]);
+
   const handleNext = useCallback(() => {
-    if (chapterIndex >= 0 && chapterIndex < chapters.length - 1) setChapterId(chapters[chapterIndex + 1].id);
-  }, [chapterIndex, chapters]);
+    if (chapterIndex < 0 || chapterIndex >= chapters.length - 1) return;
+    const nextId = chapters[chapterIndex + 1].id;
+    void loadBibleBootstrap({
+      translation,
+      preferredBookId: bookId,
+      preferredChapterId: nextId,
+    });
+  }, [chapterIndex, chapters, translation, bookId, loadBibleBootstrap]);
 
   const handleCopy = async (verse: BibleVerse) => {
     try {
@@ -551,7 +535,13 @@ export default function BiblePage() {
                 <div className="space-y-2">
                   <DropdownMenuSelect
                     value={translation}
-                    onValueChange={(v) => setTranslation(v as Translation)}
+                    onValueChange={(v) =>
+                      void loadBibleBootstrap({
+                        translation: v as Translation,
+                        preferredBookId: null,
+                        preferredChapterId: null,
+                      })
+                    }
                     label={translation}
                   >
                     <DropdownMenuRadioItem value="NIV">NIV</DropdownMenuRadioItem>
@@ -560,7 +550,13 @@ export default function BiblePage() {
 
                   <DropdownMenuSelect
                     value={bookId}
-                    onValueChange={setBookId}
+                    onValueChange={(id) =>
+                      void loadBibleBootstrap({
+                        translation,
+                        preferredBookId: id,
+                        preferredChapterId: null,
+                      })
+                    }
                     label={selectedBook?.name ?? "Book"}
                     disabled={books.length === 0}
                   >
@@ -571,7 +567,13 @@ export default function BiblePage() {
 
                   <DropdownMenuSelect
                     value={chapterId}
-                    onValueChange={setChapterId}
+                    onValueChange={(id) =>
+                      void loadBibleBootstrap({
+                        translation,
+                        preferredBookId: bookId,
+                        preferredChapterId: id,
+                      })
+                    }
                     label={selectedChapter ? `Chapter ${selectedChapter.number}` : "Chapter"}
                     disabled={chapters.length === 0}
                   >
