@@ -15,6 +15,16 @@ type ChatHistoryRow = {
   created_at: string;
 };
 
+function shouldUseRetrieval(message: string): boolean {
+  const text = message.toLowerCase();
+  // Retrieval is most useful when the user asks for precise biblical grounding.
+  return (
+    /\b(verse|verses|scripture|bible|passage|chapter|reference|references)\b/.test(text) ||
+    /\b(what does .* mean|where in the bible|explain .* scripture)\b/.test(text) ||
+    /\b(john|psalm|proverbs|romans|matthew|mark|luke|genesis|isaiah)\s+\d+[:.]\d+\b/.test(text)
+  );
+}
+
 const ENCOURAGEMENT_SCHEMA = {
   type: "object",
   properties: {
@@ -189,33 +199,40 @@ export async function generateEncouragementForUser(input: {
   if (userMessageError) throw userMessageError;
 
   const openai = getOpenAiClient();
-  const embedding = await openai.embeddings.create({
-    model: "text-embedding-3-small",
-    input: message,
-  });
-  const queryEmbedding = embedding.data[0]?.embedding;
-  if (!queryEmbedding) {
-    throw new Error("Failed to generate embedding.");
-  }
+  const useRetrieval = shouldUseRetrieval(message);
 
-  const { data: contextRows, error: matchError } = await supabase.rpc("match_documents", {
-    query_embedding: queryEmbedding,
-    match_count: 5,
-    filter: {},
-  });
-  if (matchError) throw matchError;
-
-  const context = ((contextRows ?? []) as MatchDocumentRow[])
-    .map((row) => `- ${row.content}`)
-    .join("\n");
-
-  const { data: historyRows, error: historyError } = await supabase
+  const historyPromise = supabase
     .from("chat_messages")
     .select("role,content,created_at")
     .eq("conversation_id", activeConversationId)
     .eq("user_id", user.id)
     .order("created_at", { ascending: false })
-    .limit(14);
+    .limit(10);
+
+  const retrievalPromise = useRetrieval
+    ? (async () => {
+        const embedding = await openai.embeddings.create({
+          model: "text-embedding-3-small",
+          input: message,
+        });
+        const queryEmbedding = embedding.data[0]?.embedding;
+        if (!queryEmbedding) {
+          throw new Error("Failed to generate embedding.");
+        }
+        const { data: contextRows, error: matchError } = await supabase.rpc("match_documents", {
+          query_embedding: queryEmbedding,
+          match_count: 4,
+          filter: {},
+        });
+        if (matchError) throw matchError;
+        return ((contextRows ?? []) as MatchDocumentRow[]).map((row) => `- ${row.content}`).join("\n");
+      })()
+    : Promise.resolve("");
+
+  const [{ data: historyRows, error: historyError }, context] = await Promise.all([
+    historyPromise,
+    retrievalPromise,
+  ]);
   if (historyError) throw historyError;
 
   const historyMessagesRaw = ((historyRows ?? []) as ChatHistoryRow[])
@@ -232,7 +249,7 @@ export async function generateEncouragementForUser(input: {
   }
 
   const completion = await openai.chat.completions.create({
-    model: "gpt-4.1",
+    model: useRetrieval ? "gpt-4.1" : "gpt-4.1-mini",
     temperature: 0.6,
     response_format: {
       type: "json_schema",
