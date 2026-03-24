@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { gql } from "@apollo/client";
-import { Copy, MessageSquare, X } from "lucide-react";
+import { Copy, Highlighter, MessageSquare, X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import PageTransition from "@/components/PageTransition";
 import EmptyState from "@/components/ui/EmptyState";
@@ -23,8 +23,20 @@ type LineSpacing = "tight" | "normal" | "relaxed" | "loose";
 type BibleBook = { id: string; name: string };
 type BibleChapter = { id: string; number: number };
 type BibleVerse = { reference: string; text: string; verse: number };
-type Note = { id: string; verseReference: string; content: string; timestamp: string };
 type BibleProgress = { translation: Translation; bookId: string; chapterId: string; verse: number };
+type BibleHighlight = {
+  id: string;
+  verseStart: number;
+  verseEnd: number;
+  color: string;
+};
+type BibleNote = {
+  id: string;
+  verseStart: number;
+  verseEnd: number;
+  content: string;
+  createdAt: string;
+};
 type BibleBootstrap = {
   translation: Translation;
   books: BibleBook[];
@@ -106,6 +118,55 @@ const SAVE_BIBLE_PROGRESS_MUTATION = gql`
   }
 `;
 
+const BIBLE_ANNOTATIONS_QUERY = gql`
+  query BibleAnnotations($translation: String!, $bookId: String!, $chapterId: String!) {
+    bibleAnnotations(translation: $translation, bookId: $bookId, chapterId: $chapterId) {
+      highlights {
+        id
+        verseStart
+        verseEnd
+        color
+      }
+      notes {
+        id
+        verseStart
+        verseEnd
+        content
+        createdAt
+      }
+    }
+  }
+`;
+
+const SAVE_BIBLE_HIGHLIGHT_MUTATION = gql`
+  mutation SaveBibleHighlight($input: SaveBibleHighlightInput!) {
+    saveBibleHighlight(input: $input) {
+      id
+      verseStart
+      verseEnd
+      color
+    }
+  }
+`;
+
+const DELETE_BIBLE_NOTE_MUTATION = gql`
+  mutation DeleteBibleNote($id: String!) {
+    deleteBibleNote(id: $id)
+  }
+`;
+
+const SAVE_BIBLE_NOTE_MUTATION = gql`
+  mutation SaveBibleNote($input: SaveBibleNoteInput!) {
+    saveBibleNote(input: $input) {
+      id
+      verseStart
+      verseEnd
+      content
+      createdAt
+    }
+  }
+`;
+
 /** Dedupes save mutation when React Strict Mode double-invokes effects (dev). */
 let lastServerSavedProgressKey: string | null = null;
 
@@ -124,9 +185,11 @@ export default function BiblePage() {
   const [lineSpacing, setLineSpacing] = useState<LineSpacing>("normal");
   const [isNavSheetOpen, setIsNavSheetOpen] = useState(false);
   const [isNotesOpen, setIsNotesOpen] = useState(false);
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [activeVerseForNote, setActiveVerseForNote] = useState<string | null>(null);
-  const [activeVerseId, setActiveVerseId] = useState<string | null>(null);
+  const [highlights, setHighlights] = useState<BibleHighlight[]>([]);
+  const [notes, setNotes] = useState<BibleNote[]>([]);
+  const [selectedVerses, setSelectedVerses] = useState<number[]>([]);
+  const [selectionAnchor, setSelectionAnchor] = useState<number | null>(null);
+  const [isCreatingNote, setIsCreatingNote] = useState(false);
   const [noteDraft, setNoteDraft] = useState("");
   const [toast, setToast] = useState<string | null>(null);
   const [isBootstrapped, setIsBootstrapped] = useState(false);
@@ -183,6 +246,8 @@ export default function BiblePage() {
         setChapters(payload.chapters);
         setChapterId(payload.selectedChapterId);
         setVerses(payload.verses);
+        setSelectedVerses([]);
+        setSelectionAnchor(null);
 
         if (args.restoreVerse) {
           const verseNum =
@@ -190,13 +255,12 @@ export default function BiblePage() {
               ? args.localVerseHint
               : payload.progress?.verse ?? null;
           if (typeof verseNum === "number" && Number.isFinite(verseNum)) {
-            const matched = payload.verses.find((v) => v.verse === verseNum);
-            setActiveVerseId(matched?.reference ?? null);
-          } else {
-            setActiveVerseId(null);
+            const matched = payload.verses.find((v) => v.verse === verseNum)?.verse ?? null;
+            if (matched) {
+              setSelectedVerses([matched]);
+              setSelectionAnchor(matched);
+            }
           }
-        } else {
-          setActiveVerseId(null);
         }
       } catch (err) {
         if (args.signal?.aborted) return;
@@ -258,10 +322,6 @@ export default function BiblePage() {
       if (prefs.fontFamily && ["serif", "sans"].includes(prefs.fontFamily)) setFontFamily(prefs.fontFamily as FontFamily);
       if (prefs.lineSpacing && ["tight", "normal", "relaxed", "loose"].includes(prefs.lineSpacing)) setLineSpacing(prefs.lineSpacing as LineSpacing);
     } catch {}
-    try {
-      const raw = window.localStorage.getItem("abide_bible_notes");
-      if (raw) setNotes(JSON.parse(raw) as Note[]);
-    } catch {}
   }, []);
 
   useEffect(() => {
@@ -269,13 +329,43 @@ export default function BiblePage() {
   }, [fontSize, fontFamily, lineSpacing]);
 
   useEffect(() => {
-    window.localStorage.setItem("abide_bible_notes", JSON.stringify(notes));
-  }, [notes]);
+    const abortController = new AbortController();
+    const run = async () => {
+      if (!translation || !bookId || !chapterId) return;
+      try {
+        const token = await getAccessToken();
+        if (!token || abortController.signal.aborted) {
+          setHighlights([]);
+          setNotes([]);
+          return;
+        }
+        const client = getApolloClient();
+        const { data } = await client.query<{
+          bibleAnnotations?: { highlights: BibleHighlight[]; notes: BibleNote[] };
+        }>({
+          query: BIBLE_ANNOTATIONS_QUERY,
+          variables: { translation, bookId, chapterId },
+          fetchPolicy: "no-cache",
+          context: { headers: { Authorization: `Bearer ${token}` } },
+        });
+        if (abortController.signal.aborted) return;
+        setHighlights(data?.bibleAnnotations?.highlights ?? []);
+        setNotes(data?.bibleAnnotations?.notes ?? []);
+      } catch {
+        if (!abortController.signal.aborted) {
+          setHighlights([]);
+          setNotes([]);
+        }
+      }
+    };
+    void run();
+    return () => abortController.abort();
+  }, [translation, bookId, chapterId, getAccessToken]);
 
   useEffect(() => {
     if (!isBootstrapped || !bookId || !chapterId) return;
     const activeVerseNumber =
-      verses.find((verse) => verse.reference === activeVerseId)?.verse ?? 1;
+      selectedVerses[0] ?? 1;
     const progress: BibleProgress = {
       translation,
       bookId,
@@ -306,7 +396,7 @@ export default function BiblePage() {
         // Silent fallback to local storage.
       }
     })();
-  }, [isBootstrapped, translation, bookId, chapterId, verses, activeVerseId, getAccessToken]);
+  }, [isBootstrapped, translation, bookId, chapterId, selectedVerses, getAccessToken]);
 
   useEffect(() => {
     if (!toast) return;
@@ -334,30 +424,144 @@ export default function BiblePage() {
     });
   }, [chapterIndex, chapters, translation, bookId, loadBibleBootstrap]);
 
-  const handleCopy = async (verse: BibleVerse) => {
+  const selectedRange = useMemo(() => {
+    if (selectedVerses.length === 0) return null;
+    const sorted = [...selectedVerses].sort((a, b) => a - b);
+    return { start: sorted[0], end: sorted[sorted.length - 1] };
+  }, [selectedVerses]);
+
+  const isVerseHighlighted = useCallback(
+    (verseNumber: number) =>
+      highlights.some((h) => verseNumber >= h.verseStart && verseNumber <= h.verseEnd),
+    [highlights]
+  );
+
+  const handleSelectVerse = (verseNumber: number, shiftKey: boolean) => {
+    setSelectedVerses((prev) => {
+      if (shiftKey && selectionAnchor !== null) {
+        const start = Math.min(selectionAnchor, verseNumber);
+        const end = Math.max(selectionAnchor, verseNumber);
+        const range = Array.from({ length: end - start + 1 }, (_, i) => start + i);
+        return range;
+      }
+      if (prev.includes(verseNumber)) {
+        return prev.filter((v) => v !== verseNumber);
+      }
+      return [...prev, verseNumber].sort((a, b) => a - b);
+    });
+    if (!shiftKey) {
+      setSelectionAnchor(verseNumber);
+    }
+  };
+
+  const handleCopySelected = async () => {
+    if (!selectedRange) return;
+    const selectedTexts = verses
+      .filter((v) => v.verse >= selectedRange.start && v.verse <= selectedRange.end)
+      .map((v) => `${v.reference} ${v.text}`)
+      .join("\n");
     try {
-      await navigator.clipboard.writeText(`${verse.reference} — ${verse.text}`);
-      setToast(`Copied ${verse.reference}`);
+      await navigator.clipboard.writeText(selectedTexts);
+      setToast(
+        selectedRange.start === selectedRange.end
+          ? `Copied verse ${selectedRange.start}`
+          : `Copied verses ${selectedRange.start}-${selectedRange.end}`
+      );
     } catch {
       setToast("Copy failed");
     }
   };
 
-  const handleOpenNote = (ref: string) => {
-    setActiveVerseForNote(ref);
-    setNoteDraft("");
-    setIsNotesOpen(true);
+  const handleSaveHighlight = async () => {
+    if (!selectedRange) return;
+    try {
+      const token = await getAccessToken();
+      if (!token) {
+        setToast("Please log in to save highlights");
+        return;
+      }
+      const client = getApolloClient();
+      const { data } = await client.mutate<{
+        saveBibleHighlight?: BibleHighlight;
+      }>({
+        mutation: SAVE_BIBLE_HIGHLIGHT_MUTATION,
+        variables: {
+          input: {
+            translation,
+            bookId,
+            chapterId,
+            verseStart: selectedRange.start,
+            verseEnd: selectedRange.end,
+            color: "gold",
+          },
+        },
+        context: { headers: { Authorization: `Bearer ${token}` } },
+      });
+      const saved = data?.saveBibleHighlight;
+      if (saved) {
+        setHighlights((prev) => [...prev.filter((h) => h.id !== saved.id), saved]);
+        setToast("Highlight saved");
+      }
+    } catch {
+      setToast("Unable to save highlight");
+    }
   };
 
   const handleSaveNote = () => {
-    if (!activeVerseForNote || !noteDraft.trim()) return;
-    setNotes((prev) => [
-      { id: `note-${Date.now()}`, verseReference: activeVerseForNote, content: noteDraft.trim(), timestamp: new Date().toISOString() },
-      ...prev,
-    ]);
-    setNoteDraft("");
-    setActiveVerseForNote(null);
-    setToast("Note saved");
+    void (async () => {
+      if (!selectedRange || !noteDraft.trim()) return;
+      try {
+        const token = await getAccessToken();
+        if (!token) {
+          setToast("Please log in to save notes");
+          return;
+        }
+        const client = getApolloClient();
+        const { data } = await client.mutate<{
+          saveBibleNote?: BibleNote;
+        }>({
+          mutation: SAVE_BIBLE_NOTE_MUTATION,
+          variables: {
+            input: {
+              translation,
+              bookId,
+              chapterId,
+              verseStart: selectedRange.start,
+              verseEnd: selectedRange.end,
+              content: noteDraft.trim(),
+            },
+          },
+          context: { headers: { Authorization: `Bearer ${token}` } },
+        });
+        const saved = data?.saveBibleNote;
+        if (saved) {
+          setNotes((prev) => [saved, ...prev.filter((n) => n.id !== saved.id)]);
+          setNoteDraft("");
+          setIsCreatingNote(false);
+          setToast("Note saved");
+        }
+      } catch {
+        setToast("Unable to save note");
+      }
+    })();
+  };
+
+  const handleDeleteNote = (id: string) => {
+    void (async () => {
+      try {
+        const token = await getAccessToken();
+        if (!token) return;
+        const client = getApolloClient();
+        await client.mutate({
+          mutation: DELETE_BIBLE_NOTE_MUTATION,
+          variables: { id },
+          context: { headers: { Authorization: `Bearer ${token}` } },
+        });
+        setNotes((prev) => prev.filter((n) => n.id !== id));
+      } catch {
+        setToast("Unable to delete note");
+      }
+    })();
   };
 
   const verseTextClasses = cn(
@@ -425,6 +629,52 @@ export default function BiblePage() {
           </AnimatePresence>
 
           <div className="px-5 py-6">
+            {selectedRange ? (
+              <div className="sticky top-2 z-20 mb-3 rounded-xl border border-gold/20 bg-white/95 dark:bg-dark-card/95 backdrop-blur px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-muted">
+                    {selectedRange.start === selectedRange.end
+                      ? `Verse ${selectedRange.start} selected`
+                      : `Verses ${selectedRange.start}-${selectedRange.end} selected`}
+                  </p>
+                  <button
+                    onClick={() => {
+                      setSelectedVerses([]);
+                      setSelectionAnchor(null);
+                    }}
+                    className="text-xs text-muted hover:text-ink dark:hover:text-parchment"
+                  >
+                    Clear
+                  </button>
+                </div>
+                <div className="mt-2 flex items-center gap-2">
+                  <button
+                    onClick={handleCopySelected}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-muted hover:text-ink dark:hover:text-parchment bg-white dark:bg-dark-card border border-gold/10 rounded-lg px-2.5 py-1.5 transition-colors"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    Copy
+                  </button>
+                  <button
+                    onClick={handleSaveHighlight}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-muted hover:text-ink dark:hover:text-parchment bg-white dark:bg-dark-card border border-gold/10 rounded-lg px-2.5 py-1.5 transition-colors"
+                  >
+                    <Highlighter className="w-3.5 h-3.5" />
+                    Highlight
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsNotesOpen(true);
+                      setIsCreatingNote(true);
+                    }}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-muted hover:text-ink dark:hover:text-parchment bg-white dark:bg-dark-card border border-gold/10 rounded-lg px-2.5 py-1.5 transition-colors"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    Note
+                  </button>
+                </div>
+              </div>
+            ) : null}
             {error ? (
               <p className="text-xs text-red-600 text-center">{error}</p>
             ) : isLoading ? (
@@ -441,61 +691,31 @@ export default function BiblePage() {
                   transition={{ duration: 0.25, ease: "easeOut" }}
                 >
                   {verses.map((verse, idx) => {
-                    const isActive = activeVerseId === verse.reference;
+                    const isActive = selectedVerses.includes(verse.verse);
+                    const isHighlighted = isVerseHighlighted(verse.verse);
                     return (
                       <motion.div
                         key={verse.reference}
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ delay: Math.min(idx * 0.01, 0.1), duration: 0.15 }}
-                        onClick={() => setActiveVerseId(isActive ? null : verse.reference)}
+                        onClick={(e) => handleSelectVerse(verse.verse, e.shiftKey)}
                         className="group cursor-pointer"
                       >
                         <div
                           className={cn(
                             "relative rounded-xl px-3 pt-2 pb-5 -mx-1 transition-colors",
-                            isActive ? "bg-gold/[0.07] dark:bg-gold/[0.12]" : "hover:bg-gold/[0.04]"
+                            isActive
+                              ? "bg-gold/[0.09] dark:bg-gold/[0.16]"
+                              : isHighlighted
+                                ? "bg-gold/[0.06] dark:bg-gold/[0.12]"
+                                : "hover:bg-gold/[0.04]"
                           )}
                         >
                           <p className={verseTextClasses}>
                             <sup className="text-gold font-bold text-[0.65em] mr-1 select-none">{verse.verse}</sup>
                             {verse.text}
                           </p>
-
-                          <AnimatePresence>
-                            {isActive ? (
-                              <motion.div
-                                initial={{ opacity: 0, height: 0 }}
-                                animate={{ opacity: 1, height: "auto" }}
-                                exit={{ opacity: 0, height: 0 }}
-                                transition={{ duration: 0.18 }}
-                                className="overflow-hidden"
-                              >
-                                <div className="flex items-center gap-2 pt-2 pb-1">
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleOpenNote(verse.reference);
-                                    }}
-                                    className="inline-flex items-center gap-1 text-xs font-medium text-muted hover:text-ink dark:hover:text-parchment bg-white dark:bg-dark-card border border-gold/10 rounded-lg px-2.5 py-1.5 transition-colors"
-                                  >
-                                    <MessageSquare className="w-3.5 h-3.5" />
-                                    Note
-                                  </button>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleCopy(verse);
-                                    }}
-                                    className="inline-flex items-center gap-1 text-xs font-medium text-muted hover:text-ink dark:hover:text-parchment bg-white dark:bg-dark-card border border-gold/10 rounded-lg px-2.5 py-1.5 transition-colors"
-                                  >
-                                    <Copy className="w-3.5 h-3.5" />
-                                    Copy
-                                  </button>
-                                </div>
-                              </motion.div>
-                            ) : null}
-                          </AnimatePresence>
                         </div>
                       </motion.div>
                     );
@@ -668,7 +888,7 @@ export default function BiblePage() {
             >
               <div className="flex items-center justify-between px-4 pt-4 pb-2">
                 <h3 className="font-serif text-lg font-semibold text-ink dark:text-parchment">
-                  {activeVerseForNote ? "Add Note" : `Notes (${notes.length})`}
+                  {isCreatingNote ? "Add Note" : `Notes (${notes.length})`}
                 </h3>
                 <button onClick={() => setIsNotesOpen(false)} className="p-1.5 rounded-lg hover:bg-gold/10">
                   <X className="w-4 h-4" />
@@ -676,9 +896,15 @@ export default function BiblePage() {
               </div>
 
               <div className="flex-1 overflow-y-auto px-4 pb-4">
-                {activeVerseForNote ? (
+                {isCreatingNote ? (
                   <div className="space-y-3">
-                    <p className="text-xs text-gold font-medium">{activeVerseForNote}</p>
+                    <p className="text-xs text-gold font-medium">
+                      {selectedRange
+                        ? selectedRange.start === selectedRange.end
+                          ? `Verse ${selectedRange.start}`
+                          : `Verses ${selectedRange.start}-${selectedRange.end}`
+                        : "No verses selected"}
+                    </p>
                     <textarea
                       value={noteDraft}
                       onChange={(e) => setNoteDraft(e.target.value)}
@@ -688,12 +914,12 @@ export default function BiblePage() {
                     />
                     <div className="flex gap-2">
                       <Button size="sm" onClick={handleSaveNote} disabled={!noteDraft.trim()} className="flex-1">Save</Button>
-                      <Button size="sm" variant="outline" onClick={() => { setActiveVerseForNote(null); setNoteDraft(""); }} className="flex-1">Cancel</Button>
+                      <Button size="sm" variant="outline" onClick={() => { setIsCreatingNote(false); setNoteDraft(""); }} className="flex-1">Cancel</Button>
                     </div>
                   </div>
                 ) : notes.length === 0 ? (
                   <p className="text-sm text-muted text-center py-10">
-                    Tap a verse, then &quot;Note&quot; to start.
+                    Select verse(s), then tap &quot;Note&quot; to start.
                   </p>
                 ) : (
                   <div className="space-y-2">
@@ -701,14 +927,18 @@ export default function BiblePage() {
                       <div key={note.id} className="rounded-xl bg-parchment/40 dark:bg-dark-bg/40 p-3">
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold text-gold">{note.verseReference}</p>
+                            <p className="text-xs font-semibold text-gold">
+                              {note.verseStart === note.verseEnd
+                                ? `Verse ${note.verseStart}`
+                                : `Verses ${note.verseStart}-${note.verseEnd}`}
+                            </p>
                             <p className="text-sm mt-1 whitespace-pre-wrap text-ink dark:text-parchment">{note.content}</p>
                             <p className="text-[10px] text-muted mt-1.5">
-                              {new Date(note.timestamp).toLocaleDateString()}
+                              {new Date(note.createdAt).toLocaleDateString()}
                             </p>
                           </div>
                           <button
-                            onClick={() => setNotes((prev) => prev.filter((n) => n.id !== note.id))}
+                            onClick={() => handleDeleteNote(note.id)}
                             className="p-1 text-muted hover:text-red-500 transition-colors flex-shrink-0"
                           >
                             <X className="w-3.5 h-3.5" />

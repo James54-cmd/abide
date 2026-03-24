@@ -124,6 +124,35 @@ const typeDefs = `
     updatedAt: String
   }
 
+  type BibleHighlight {
+    id: String!
+    translation: String!
+    bookId: String!
+    chapterId: String!
+    verseStart: Int!
+    verseEnd: Int!
+    color: String!
+    createdAt: String!
+    updatedAt: String!
+  }
+
+  type BibleNote {
+    id: String!
+    translation: String!
+    bookId: String!
+    chapterId: String!
+    verseStart: Int!
+    verseEnd: Int!
+    content: String!
+    createdAt: String!
+    updatedAt: String!
+  }
+
+  type BibleAnnotationsPayload {
+    highlights: [BibleHighlight!]!
+    notes: [BibleNote!]!
+  }
+
   type BibleBootstrapPayload {
     translation: String!
     books: [BibleBook!]!
@@ -183,10 +212,34 @@ const typeDefs = `
     verse: Int
   }
 
+  input SaveBibleHighlightInput {
+    id: String
+    translation: String!
+    bookId: String!
+    chapterId: String!
+    verseStart: Int!
+    verseEnd: Int!
+    color: String
+  }
+
+  input SaveBibleNoteInput {
+    id: String
+    translation: String!
+    bookId: String!
+    chapterId: String!
+    verseStart: Int!
+    verseEnd: Int!
+    content: String!
+  }
+
   type Mutation {
     signUp(input: SignUpInput!): AuthPayload!
     login(input: LoginInput!): AuthPayload!
     saveBibleProgress(input: SaveBibleProgressInput!): BibleProgress!
+    saveBibleHighlight(input: SaveBibleHighlightInput!): BibleHighlight!
+    deleteBibleHighlight(id: String!): Boolean!
+    saveBibleNote(input: SaveBibleNoteInput!): BibleNote!
+    deleteBibleNote(id: String!): Boolean!
     deleteChatConversation(id: String!): Boolean!
     generateEncouragement(input: GenerateEncouragementInput!): GenerateEncouragementPayload!
   }
@@ -198,6 +251,11 @@ const typeDefs = `
       preferredBookId: String
       preferredChapterId: String
     ): BibleBootstrapPayload!
+    bibleAnnotations(
+      translation: String!
+      bookId: String!
+      chapterId: String!
+    ): BibleAnnotationsPayload!
     chatBootstrap(
       conversationId: String
       includeMessages: Boolean
@@ -352,6 +410,71 @@ const resolvers = {
               updatedAt: progress.updatedAt ?? null,
             }
           : null,
+      };
+    },
+    bibleAnnotations: async (
+      _: unknown,
+      args: { translation: string; bookId: string; chapterId: string },
+      context: GraphQlContext
+    ) => {
+      const { user, supabase } = await requireUserFromAuthHeader(context.authHeader);
+      const translation = args.translation.toUpperCase();
+      if (!["NIV", "NLT"].includes(translation)) {
+        throw new Error("Invalid translation.");
+      }
+      const bookId = args.bookId?.trim();
+      const chapterId = args.chapterId?.trim();
+      if (!bookId || !chapterId) {
+        throw new Error("bookId and chapterId are required.");
+      }
+
+      const [highlightsRes, notesRes] = await Promise.all([
+        supabase
+          .from("bible_highlights")
+          .select("id,translation,book_id,chapter_id,verse_start,verse_end,color,created_at,updated_at")
+          .eq("user_id", user.id)
+          .eq("translation", translation)
+          .eq("book_id", bookId)
+          .eq("chapter_id", chapterId)
+          .order("verse_start", { ascending: true })
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("bible_notes")
+          .select("id,translation,book_id,chapter_id,verse_start,verse_end,content,created_at,updated_at")
+          .eq("user_id", user.id)
+          .eq("translation", translation)
+          .eq("book_id", bookId)
+          .eq("chapter_id", chapterId)
+          .order("verse_start", { ascending: true })
+          .order("created_at", { ascending: false }),
+      ]);
+
+      if (highlightsRes.error) throw highlightsRes.error;
+      if (notesRes.error) throw notesRes.error;
+
+      return {
+        highlights: (highlightsRes.data ?? []).map((row) => ({
+          id: row.id,
+          translation: row.translation,
+          bookId: row.book_id,
+          chapterId: row.chapter_id,
+          verseStart: row.verse_start,
+          verseEnd: row.verse_end,
+          color: row.color ?? "gold",
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        })),
+        notes: (notesRes.data ?? []).map((row) => ({
+          id: row.id,
+          translation: row.translation,
+          bookId: row.book_id,
+          chapterId: row.chapter_id,
+          verseStart: row.verse_start,
+          verseEnd: row.verse_end,
+          content: row.content,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        })),
       };
     },
     chatBootstrap: async (
@@ -547,6 +670,139 @@ const resolvers = {
         verse: data.verse,
         updatedAt: data.updated_at,
       };
+    },
+    saveBibleHighlight: async (
+      _: unknown,
+      args: {
+        input: {
+          id?: string | null;
+          translation: string;
+          bookId: string;
+          chapterId: string;
+          verseStart: number;
+          verseEnd: number;
+          color?: string | null;
+        };
+      },
+      context: GraphQlContext
+    ) => {
+      const { user, supabase } = await requireUserFromAuthHeader(context.authHeader);
+      const translation = args.input.translation.toUpperCase();
+      if (!["NIV", "NLT"].includes(translation)) throw new Error("Invalid translation.");
+      const bookId = args.input.bookId?.trim();
+      const chapterId = args.input.chapterId?.trim();
+      if (!bookId || !chapterId) throw new Error("bookId and chapterId are required.");
+      const start = Math.max(1, Math.floor(args.input.verseStart));
+      const end = Math.max(start, Math.floor(args.input.verseEnd));
+      const color = args.input.color?.trim() || "gold";
+
+      const payload = {
+        user_id: user.id,
+        translation,
+        book_id: bookId,
+        chapter_id: chapterId,
+        verse_start: start,
+        verse_end: end,
+        color,
+      };
+
+      const query = args.input.id?.trim()
+        ? supabase.from("bible_highlights").update(payload).eq("id", args.input.id.trim())
+        : supabase.from("bible_highlights").insert(payload);
+      const { data, error } = await query
+        .select("id,translation,book_id,chapter_id,verse_start,verse_end,color,created_at,updated_at")
+        .single();
+      if (error) throw error;
+      return {
+        id: data.id,
+        translation: data.translation,
+        bookId: data.book_id,
+        chapterId: data.chapter_id,
+        verseStart: data.verse_start,
+        verseEnd: data.verse_end,
+        color: data.color ?? "gold",
+        createdAt: data.created_at,
+        updatedAt: data.updated_at,
+      };
+    },
+    deleteBibleHighlight: async (_: unknown, args: { id: string }, context: GraphQlContext) => {
+      const { user, supabase } = await requireUserFromAuthHeader(context.authHeader);
+      const id = args.id?.trim();
+      if (!id) throw new Error("id is required.");
+      const { error } = await supabase
+        .from("bible_highlights")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", user.id);
+      if (error) throw error;
+      return true;
+    },
+    saveBibleNote: async (
+      _: unknown,
+      args: {
+        input: {
+          id?: string | null;
+          translation: string;
+          bookId: string;
+          chapterId: string;
+          verseStart: number;
+          verseEnd: number;
+          content: string;
+        };
+      },
+      context: GraphQlContext
+    ) => {
+      const { user, supabase } = await requireUserFromAuthHeader(context.authHeader);
+      const translation = args.input.translation.toUpperCase();
+      if (!["NIV", "NLT"].includes(translation)) throw new Error("Invalid translation.");
+      const bookId = args.input.bookId?.trim();
+      const chapterId = args.input.chapterId?.trim();
+      if (!bookId || !chapterId) throw new Error("bookId and chapterId are required.");
+      const content = args.input.content?.trim();
+      if (!content) throw new Error("content is required.");
+      const start = Math.max(1, Math.floor(args.input.verseStart));
+      const end = Math.max(start, Math.floor(args.input.verseEnd));
+
+      const payload = {
+        user_id: user.id,
+        translation,
+        book_id: bookId,
+        chapter_id: chapterId,
+        verse_start: start,
+        verse_end: end,
+        content,
+      };
+
+      const query = args.input.id?.trim()
+        ? supabase.from("bible_notes").update(payload).eq("id", args.input.id.trim())
+        : supabase.from("bible_notes").insert(payload);
+      const { data, error } = await query
+        .select("id,translation,book_id,chapter_id,verse_start,verse_end,content,created_at,updated_at")
+        .single();
+      if (error) throw error;
+      return {
+        id: data.id,
+        translation: data.translation,
+        bookId: data.book_id,
+        chapterId: data.chapter_id,
+        verseStart: data.verse_start,
+        verseEnd: data.verse_end,
+        content: data.content,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at,
+      };
+    },
+    deleteBibleNote: async (_: unknown, args: { id: string }, context: GraphQlContext) => {
+      const { user, supabase } = await requireUserFromAuthHeader(context.authHeader);
+      const id = args.id?.trim();
+      if (!id) throw new Error("id is required.");
+      const { error } = await supabase
+        .from("bible_notes")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", user.id);
+      if (error) throw error;
+      return true;
     },
     deleteChatConversation: async (
       _: unknown,
