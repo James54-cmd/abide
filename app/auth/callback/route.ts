@@ -1,6 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabasePublicEnv } from "@/lib/env";
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
@@ -12,14 +11,14 @@ export async function GET(request: NextRequest) {
     return response;
   }
 
-  let env: ReturnType<typeof getSupabasePublicEnv>;
-  try {
-    env = getSupabasePublicEnv();
-  } catch {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  const supabase = createServerClient(env.url, env.anonKey, {
+  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
       get(name: string) {
         return request.cookies.get(name)?.value;

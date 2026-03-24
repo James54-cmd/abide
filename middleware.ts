@@ -1,6 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabasePublicEnv } from "@/lib/env";
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
@@ -11,14 +10,10 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  let env: ReturnType<typeof getSupabasePublicEnv> | null = null;
-  try {
-    env = getSupabasePublicEnv();
-  } catch {
-    env = null;
-  }
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  if (!env) {
+  if (!supabaseUrl || !supabaseAnonKey) {
     if (!isAuthRoute) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
@@ -26,7 +21,7 @@ export async function middleware(request: NextRequest) {
   }
 
   const response = NextResponse.next({ request });
-  const supabase = createServerClient(env.url, env.anonKey, {
+  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
       get(name: string) {
         return request.cookies.get(name)?.value;
