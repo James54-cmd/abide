@@ -36,6 +36,28 @@ export const DELETE_BIBLE_NOTE_MUTATION = gql`
   }
 `;
 
+export const BULK_SAVE_BIBLE_NOTES_MUTATION = gql`
+  mutation BulkSaveBibleNotes($inputs: [SaveBibleNoteInput!]!) {
+    bulkSaveBibleNotes(inputs: $inputs) {
+      id
+      translation
+      bookId
+      chapterId
+      verseStart
+      verseEnd
+      content
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+export const BULK_DELETE_BIBLE_NOTES_MUTATION = gql`
+  mutation BulkDeleteBibleNotes($ids: [String!]!) {
+    bulkDeleteBibleNotes(ids: $ids)
+  }
+`;
+
 export const SAVE_BIBLE_HIGHLIGHT_MUTATION = gql`
   mutation SaveBibleHighlight($input: SaveBibleHighlightInput!) {
     saveBibleHighlight(input: $input) {

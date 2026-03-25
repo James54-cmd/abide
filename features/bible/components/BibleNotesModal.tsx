@@ -97,6 +97,7 @@ export default function BibleNotesModal({
                                  hour: '2-digit',
                                  minute: '2-digit'
                                })}
+                               <span className="ml-1 opacity-60">• v. {note.verse_start}{note.verse_end && note.verse_end !== note.verse_start ? `-${note.verse_end}` : ''}</span>
                                {note.updated_at && note.updated_at !== note.created_at && (
                                  <span className="ml-1 opacity-60">
                                    (Edited: {new Date(note.updated_at).toLocaleDateString(undefined, { 
@@ -146,7 +147,9 @@ export default function BibleNotesModal({
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1.5">
-                          <span className="text-[10px] font-bold text-gold/60 uppercase tracking-widest">{note.translation}</span>
+                          <span className="text-[10px] font-bold text-gold/60 uppercase tracking-widest">
+                            {note.translation} • v. {note.verse_start}{note.verse_end && note.verse_end !== note.verse_start ? `-${note.verse_end}` : ''}
+                          </span>
                           <span className="w-1 h-1 rounded-full bg-gold/20" />
                           <span className="text-[10px] text-muted font-medium">
                             {new Date(note.created_at).toLocaleDateString(undefined, { 

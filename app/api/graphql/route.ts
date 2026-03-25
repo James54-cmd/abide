@@ -248,8 +248,10 @@ const typeDefs = `
     deleteBibleHighlight(id: String!): Boolean!
     bulkSaveBibleHighlights(inputs: [SaveBibleHighlightInput!]!): [BibleHighlight!]!
     bulkDeleteBibleHighlights(ids: [String!]!): Boolean!
-    saveBibleNote(input: SaveBibleNoteInput!): BibleNote!
     deleteBibleNote(id: String!): Boolean!
+    saveBibleNote(input: SaveBibleNoteInput!): BibleNote!
+    bulkSaveBibleNotes(inputs: [SaveBibleNoteInput!]!): [BibleNote!]!
+    bulkDeleteBibleNotes(ids: [String!]!): Boolean!
     deleteChatConversation(id: String!): Boolean!
     generateEncouragement(input: GenerateEncouragementInput!): GenerateEncouragementPayload!
     resendVerification(email: String!): Boolean!
@@ -938,6 +940,73 @@ const resolvers = {
         .eq("user_id", user.id);
       if (error) throw error;
       return true;
+    },
+    bulkDeleteBibleNotes: async (_: unknown, args: { ids: string[] }, context: GraphQlContext) => {
+      const { user, supabase } = await requireUserFromAuthHeader(context.authHeader);
+      const ids = args.ids?.filter(Boolean) || [];
+      if (ids.length === 0) return true;
+      const { error } = await supabase
+        .from("bible_notes")
+        .delete()
+        .in("id", ids)
+        .eq("user_id", user.id);
+      if (error) throw error;
+      return true;
+    },
+    bulkSaveBibleNotes: async (
+      _: unknown,
+      args: {
+        inputs: {
+          translation: string;
+          bookId: string;
+          chapterId: string;
+          verseStart: number;
+          verseEnd: number;
+          content: string;
+        }[];
+      },
+      context: GraphQlContext
+    ) => {
+      const { user, supabase } = await requireUserFromAuthHeader(context.authHeader);
+      if (!args.inputs.length) return [];
+
+      const inserts = args.inputs.map(input => {
+        const translation = input.translation.toUpperCase();
+        if (!["NIV", "NLT"].includes(translation)) throw new Error("Invalid translation.");
+        const bookId = input.bookId?.trim();
+        const chapterId = input.chapterId?.trim();
+        if (!bookId || !chapterId) throw new Error("bookId and chapterId are required.");
+        const content = input.content?.trim();
+        if (!content) throw new Error("content is required.");
+        
+        return {
+          user_id: user.id,
+          translation,
+          book_id: bookId,
+          chapter_id: chapterId,
+          verse_start: Math.max(1, Math.floor(input.verseStart)),
+          verse_end: Math.max(1, Math.floor(input.verseEnd)),
+          content,
+        };
+      });
+
+      const { data, error } = await supabase
+        .from("bible_notes")
+        .insert(inserts)
+        .select("id,translation,book_id,chapter_id,verse_start,verse_end,content,created_at,updated_at");
+
+      if (error) throw error;
+      return data.map(item => ({
+        id: item.id,
+        translation: item.translation,
+        bookId: item.book_id,
+        chapterId: item.chapter_id,
+        verseStart: item.verse_start,
+        verseEnd: item.verse_end,
+        content: item.content,
+        createdAt: item.created_at,
+        updatedAt: item.updated_at,
+      }));
     },
     deleteChatConversation: async (
       _: unknown,

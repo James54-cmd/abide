@@ -71,7 +71,10 @@ export default function BiblePage() {
                 >
                   {state.verses.map((verse, idx) => {
                     const highlight = state.highlights.find(h => h.verse_start === verse.verse);
-                    const verseNotes = state.notes.filter(n => n.verse_start === verse.verse);
+                    const verseNotes = state.notes.filter(n => 
+                      verse.verse >= n.verse_start && 
+                      verse.verse <= (n.verse_end || n.verse_start)
+                    );
                     return (
                       <BibleVerseItem
                         key={verse.reference}
@@ -153,6 +156,8 @@ export default function BiblePage() {
             onSaveNote={state.handleSaveNote}
             onCancelNote={() => {
               state.setActiveVerseForNote(null);
+              state.setActiveVerseNumForNote(null);
+              state.setActiveVerseNumEndForNote(null);
               state.setNoteDraft("");
               state.setEditingNoteId(null);
             }}

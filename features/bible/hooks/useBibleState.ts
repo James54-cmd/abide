@@ -55,6 +55,7 @@ export function useBibleState() {
   const [highlights, setHighlights] = useState<BibleHighlight[]>([]);
   const [activeVerseForNote, setActiveVerseForNote] = useState<string | null>(null);
   const [activeVerseNumForNote, setActiveVerseNumForNote] = useState<number | null>(null);
+  const [activeVerseNumEndForNote, setActiveVerseNumEndForNote] = useState<number | null>(null);
   const [selectedVerseIds, setSelectedVerseIds] = useState<string[]>([]);
   const [noteDraft, setNoteDraft] = useState("");
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
@@ -351,16 +352,34 @@ export function useBibleState() {
   };
 
   const handleOpenNote = (ref: string, verseNum: number) => {
-    setActiveVerseForNote(ref);
-    setActiveVerseNumForNote(verseNum);
+    if (selectedVerseIds.length > 1) {
+      const selectedVersesData = verses.filter(v => selectedVerseIds.includes(v.reference));
+      const nums = selectedVersesData.map(v => v.verse);
+      const min = Math.min(...nums);
+      const max = Math.max(...nums);
+      
+      const rangeRef = `${bookId.toUpperCase()} ${selectedChapter?.number}:${min}${min !== max ? `-${max}` : ''}`;
+      setActiveVerseForNote(rangeRef);
+      setActiveVerseNumForNote(min);
+      setActiveVerseNumEndForNote(max);
+    } else {
+      setActiveVerseForNote(ref);
+      setActiveVerseNumForNote(verseNum);
+      setActiveVerseNumEndForNote(verseNum);
+    }
     setNoteDraft("");
     setEditingNoteId(null);
     setIsNotesOpen(true);
   };
 
   const handleEditNote = (note: BibleNote) => {
-    setActiveVerseForNote(`${bookId.toUpperCase()} ${selectedChapter?.number}:${note.verse_start}`);
+    setActiveVerseForNote(
+      `${bookId.toUpperCase()} ${selectedChapter?.number}:${note.verse_start}${
+        note.verse_end && note.verse_end !== note.verse_start ? `-${note.verse_end}` : ""
+      }`
+    );
     setActiveVerseNumForNote(note.verse_start);
+    setActiveVerseNumEndForNote(note.verse_end || note.verse_start);
     setNoteDraft(note.content);
     setEditingNoteId(note.id);
     setIsNotesOpen(true);
@@ -378,7 +397,7 @@ export function useBibleState() {
       bookId,
       chapterId: chapterId,
       verseStart: activeVerseNumForNote,
-      verseEnd: activeVerseNumForNote,
+      verseEnd: activeVerseNumEndForNote || activeVerseNumForNote,
       content: noteDraft.trim(),
     };
 
@@ -399,6 +418,7 @@ export function useBibleState() {
     setEditingNoteId(null);
     setActiveVerseForNote(null);
     setActiveVerseNumForNote(null);
+    setActiveVerseNumEndForNote(null);
     setIsNotesOpen(false);
   };
 
@@ -437,7 +457,6 @@ export function useBibleState() {
       await bulkDeleteBibleHighlights(token, idsToRemove);
       toast.success("Highlights removed");
     } else {
-      // Clear existing for these verses first
       const itemsToClear = highlights.filter(h => selectedNums.includes(h.verse_start));
       const idsToClear = itemsToClear.map(h => h.id);
       
@@ -592,6 +611,7 @@ export function useBibleState() {
     selectedVerseIds,
     noteDraft,
     activeVerseNumForNote,
+    activeVerseNumEndForNote,
     editingNoteId,
     isBootstrapped,
 
@@ -605,6 +625,7 @@ export function useBibleState() {
     setNoteDraft,
     setActiveVerseForNote,
     setActiveVerseNumForNote,
+    setActiveVerseNumEndForNote,
     setEditingNoteId,
 
     // Handlers
