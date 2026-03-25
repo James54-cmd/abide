@@ -1,790 +1,142 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { getSupabaseBrowserClient } from "@/lib/supabase";
-import {
-  fetchBibleBootstrap,
-  saveBibleProgress,
-  saveBibleNote,
-  deleteBibleNote,
-  bulkSaveBibleHighlights,
-  bulkDeleteBibleHighlights,
-  bulkSaveBibleFavorites,
-  bulkDeleteBibleFavorites,
-} from "@/lib/graphql/bible/hooks";
-import { toast } from "sonner";
-import type {
-  Translation,
-  FontSize,
-  FontFamily,
-  LineSpacing,
-  BibleBook,
-  BibleChapter,
-  BibleVerse,
-  BibleHighlight,
-  BibleFavorite,
-  BibleNote,
-  BibleProgress,
-} from "@/features/bible/types";
-import {
-  FONT_SIZE_CLASSES,
-  FONT_FAMILY_CLASSES,
-  LINE_SPACING_CLASSES,
-} from "@/features/bible/types";
-import { getActiveHighlightColor, getFormattedSelectionCitation } from "@/features/bible/utils";
-import { cn } from "@/lib/utils";
+import { useEffect, useRef } from "react";
+import { getAccessToken } from "@/lib/supabase";
+import { saveBibleProgress } from "@/lib/graphql/bible/hooks";
+import type { BibleProgress } from "@/features/bible/types";
+import { useBibleNavigation } from "@/features/bible/hooks/useBibleNavigation";
+import { useBiblePreferences } from "@/features/bible/hooks/useBiblePreferences";
+import { useBibleAnnotations } from "@/features/bible/hooks/useBibleAnnotations";
 
-/** Dedupes save mutation when React Strict Mode double-invokes effects (dev). */
-let lastServerSavedProgressKey: string | null = null;
+const PROGRESS_KEY = "abide_bible_progress";
 
 export function useBibleState() {
-  const [translation, setTranslation] = useState<Translation>("NIV");
-  const [books, setBooks] = useState<BibleBook[]>([]);
-  const [bookId, setBookId] = useState("");
-  const [chapters, setChapters] = useState<BibleChapter[]>([]);
-  const [chapterId, setChapterId] = useState("");
-  const [verses, setVerses] = useState<BibleVerse[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const nav = useBibleNavigation();
+  const prefs = useBiblePreferences(nav.serverProgress);
+  const annotations = useBibleAnnotations({
+    translation: nav.translation,
+    bookId: nav.bookId,
+    chapterId: nav.chapterId,
+    verses: nav.verses,
+    selectedVerseIds: nav.selectedVerseIds,
+    setSelectedVerseIds: nav.setSelectedVerseIds,
+    selectedBook: nav.selectedBook,
+    selectedChapter: nav.selectedChapter,
+    chapterLabel: nav.chapterLabel,
+    isBootstrapped: nav.isBootstrapped,
+    isLoading: nav.isLoading,
+  });
 
-  const [fontSize, setFontSize] = useState<FontSize>("medium");
-  const [fontFamily, setFontFamily] = useState<FontFamily>("serif");
-  const [lineSpacing, setLineSpacing] = useState<LineSpacing>("normal");
-  const [isNavSheetOpen, setIsNavSheetOpen] = useState(false);
-  const [isNotesOpen, setIsNotesOpen] = useState(false);
-  const [notes, setNotes] = useState<BibleNote[]>([]);
-  const [highlights, setHighlights] = useState<BibleHighlight[]>([]);
-  const [favorites, setFavorites] = useState<BibleFavorite[]>([]);
-  const [activeVerseForNote, setActiveVerseForNote] = useState<string | null>(null);
-  const [activeVerseNumForNote, setActiveVerseNumForNote] = useState<number | null>(null);
-  const [activeVerseNumEndForNote, setActiveVerseNumEndForNote] = useState<number | null>(null);
-  const [selectedVerseIds, setSelectedVerseIds] = useState<string[]>([]);
-  const [noteDraft, setNoteDraft] = useState("");
-  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
-  const [isBootstrapped, setIsBootstrapped] = useState(false);
+  // Cross-cutting: persist reading progress locally + to server (Rule 12: useRef, not module let)
+  const lastSavedKeyRef = useRef<string | null>(null);
 
-  const selectedBook = useMemo(() => books.find((b) => b.id === bookId) ?? null, [books, bookId]);
-  const selectedChapter = useMemo(() => chapters.find((c) => c.id === chapterId) ?? null, [chapters, chapterId]);
-  const chapterIndex = useMemo(() => chapters.findIndex((c) => c.id === chapterId), [chapters, chapterId]);
-
-  const bookIndex = useMemo(() => books.findIndex((b) => b.id === bookId), [books, bookId]);
-  const atLastChapter = useMemo(
-    () => chapters.length > 0 && chapterIndex === chapters.length - 1,
-    [chapters.length, chapterIndex]
-  );
-  const hasNextBook = useMemo(
-    () => bookIndex >= 0 && bookIndex < books.length - 1,
-    [bookIndex, books.length]
-  );
-
-  const getAccessToken = useCallback(async () => {
-    const supabase = getSupabaseBrowserClient();
-    const { data, error } = await supabase.auth.getSession();
-    if (error || !data.session?.access_token) return null;
-    return data.session.access_token;
-  }, []);
-
-  // Core bootstrap loader — single GraphQL call returns books, chapters, verses, progress
-  const loadBibleBootstrap = useCallback(
-    async (args: {
-      translation: Translation;
-      preferredBookId: string | null;
-      preferredChapterId: string | null;
-      signal?: AbortSignal;
-      restoreVerse?: boolean;
-      localVerseHint?: number | null;
-    }) => {
-      setError(null);
-      setIsLoading(true);
-      try {
-        const token = await getAccessToken();
-        if (args.signal?.aborted) return;
-
-        const payload = await fetchBibleBootstrap({
-          translation: args.translation,
-          preferredBookId: args.preferredBookId,
-          preferredChapterId: args.preferredChapterId,
-          token,
-          signal: args.signal,
-        });
-        if (args.signal?.aborted) return;
-
-        setTranslation(payload.translation as Translation);
-        setBooks(payload.books);
-        setBookId(payload.selectedBookId);
-        setChapters(payload.chapters);
-        setChapterId(payload.selectedChapterId);
-        setVerses(payload.verses);
-
-        if (args.restoreVerse) {
-          const verseNum =
-            typeof args.localVerseHint === "number" && Number.isFinite(args.localVerseHint)
-              ? args.localVerseHint
-              : payload.progress?.verse ?? null;
-          if (typeof verseNum === "number" && Number.isFinite(verseNum)) {
-            const matched = payload.verses.find((v) => v.verse === verseNum);
-            setSelectedVerseIds(matched ? [matched.reference] : []);
-          } else {
-            setSelectedVerseIds([]);
-          }
-        } else {
-          setSelectedVerseIds([]);
-        }
-
-        // Apply appearance from server progress if available
-        if (payload.progress?.fontSize) {
-          setFontSize(payload.progress.fontSize as FontSize);
-        }
-        if (payload.progress?.fontFamily) {
-          setFontFamily(payload.progress.fontFamily as FontFamily);
-        }
-        if (payload.progress?.lineSpacing) {
-          setLineSpacing(payload.progress.lineSpacing as LineSpacing);
-        }
-
-        // Fetch highlights and notes from Supabase for this chapter
-        void (async () => {
-          const supabase = getSupabaseBrowserClient();
-          const { data: { user } } = await supabase.auth.getUser();
-          if (!user) return;
-
-          const [hRes, nRes, fRes] = await Promise.all([
-            supabase
-              .from("bible_highlights")
-              .select("*")
-              .eq("user_id", user.id)
-              .eq("translation", payload.translation)
-              .eq("book_id", payload.selectedBookId)
-              .eq("chapter_id", payload.selectedChapterId),
-            supabase
-              .from("bible_notes")
-              .select("*")
-              .eq("user_id", user.id)
-              .eq("translation", payload.translation)
-              .eq("book_id", payload.selectedBookId)
-              .eq("chapter_id", payload.selectedChapterId),
-            supabase
-              .from("bible_favorites")
-              .select("*")
-              .eq("user_id", user.id)
-              .eq("translation", payload.translation)
-              .eq("book_id", payload.selectedBookId)
-              .eq("chapter_id", payload.selectedChapterId)
-          ]);
-
-          if (hRes.data) setHighlights(hRes.data as unknown as BibleHighlight[]);
-          if (nRes.data) setNotes(nRes.data as unknown as BibleNote[]);
-          if (fRes.data) setFavorites(fRes.data as unknown as BibleFavorite[]);
-        })();
-      } catch (err) {
-        if (args.signal?.aborted) return;
-        setError(err instanceof Error ? err.message : "Unknown error.");
-      } finally {
-        if (!args.signal?.aborted) {
-          setIsLoading(false);
-          setIsBootstrapped(true);
-        }
-      }
-    },
-    [getAccessToken]
-  );
-
-  // Realtime subscription for notes and highlights
   useEffect(() => {
-    if (!isBootstrapped || !bookId || !chapterId) return;
+    if (!nav.isBootstrapped || !nav.bookId || !nav.chapterId) return;
 
-    const supabase = getSupabaseBrowserClient();
-    
-    const channel = supabase
-      .channel(`bible-annotations-${bookId}-${chapterId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'bible_notes',
-          filter: `chapter_id=eq.${chapterId}`
-        },
-        (payload) => {
-          if (payload.eventType === 'INSERT') {
-            setNotes(prev => [payload.new as BibleNote, ...prev]);
-          } else if (payload.eventType === 'UPDATE') {
-            setNotes(prev => prev.map(n => n.id === payload.new.id ? (payload.new as BibleNote) : n));
-          } else if (payload.eventType === 'DELETE') {
-            setNotes(prev => prev.filter(n => n.id !== payload.old.id));
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'bible_highlights',
-          filter: `chapter_id=eq.${chapterId}`
-        },
-        (payload) => {
-          if (payload.eventType === 'INSERT') {
-            setHighlights(prev => [...prev, payload.new as BibleHighlight]);
-          } else if (payload.eventType === 'UPDATE') {
-            setHighlights(prev => prev.map(h => h.id === payload.new.id ? (payload.new as BibleHighlight) : h));
-          } else if (payload.eventType === 'DELETE') {
-            setHighlights(prev => prev.filter(h => h.id !== payload.old.id));
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [isBootstrapped, bookId, chapterId]);
-
-  // Initial load — read local progress, then bootstrap
-  useEffect(() => {
-    const abortController = new AbortController();
-
-    let localProgress: BibleProgress | null = null;
-    try {
-      const raw = window.localStorage.getItem("abide_bible_progress");
-      if (raw) {
-        const parsed = JSON.parse(raw) as Partial<BibleProgress>;
-        if (
-          (parsed.translation === "NIV" || parsed.translation === "NLT") &&
-          typeof parsed.bookId === "string" &&
-          typeof parsed.chapterId === "string"
-        ) {
-          localProgress = {
-            translation: parsed.translation,
-            bookId: parsed.bookId,
-            chapterId: parsed.chapterId,
-            verse:
-              typeof parsed.verse === "number" && Number.isFinite(parsed.verse) && parsed.verse > 0
-                ? Math.floor(parsed.verse)
-                : 1,
-          };
-        }
-      }
-    } catch {}
-
-    void loadBibleBootstrap({
-      translation: localProgress?.translation ?? "NIV",
-      preferredBookId: localProgress?.bookId ?? null,
-      preferredChapterId: localProgress?.chapterId ?? null,
-      signal: abortController.signal,
-      restoreVerse: true,
-      localVerseHint: localProgress?.verse ?? null,
-    });
-
-    return () => abortController.abort();
-  }, [loadBibleBootstrap]);
-
-  // Load preferences from localStorage
-  useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem("abide_bible_prefs");
-      if (!raw) return;
-      const prefs = JSON.parse(raw) as Record<string, string>;
-      if (prefs.fontSize && ["small", "medium", "large", "xlarge"].includes(prefs.fontSize)) setFontSize(prefs.fontSize as FontSize);
-      if (prefs.fontFamily && ["serif", "sans"].includes(prefs.fontFamily)) setFontFamily(prefs.fontFamily as FontFamily);
-      if (prefs.lineSpacing && ["tight", "normal", "relaxed", "loose"].includes(prefs.lineSpacing)) setLineSpacing(prefs.lineSpacing as LineSpacing);
-    } catch {}
-  }, []);
-
-  // Persist preferences
-  useEffect(() => {
-    window.localStorage.setItem("abide_bible_prefs", JSON.stringify({ fontSize, fontFamily, lineSpacing }));
-  }, [fontSize, fontFamily, lineSpacing]);
-
-  // Save progress (local + server)
-  useEffect(() => {
-    if (!isBootstrapped || !bookId || !chapterId) return;
-    const lastSelectedId = selectedVerseIds[selectedVerseIds.length - 1];
+    const lastSelectedId = nav.selectedVerseIds[nav.selectedVerseIds.length - 1];
     const activeVerseNumber =
-      verses.find((verse) => verse.reference === lastSelectedId)?.verse ?? 1;
+      nav.verses.find((v) => v.reference === lastSelectedId)?.verse ?? 1;
+
     const progress: BibleProgress = {
-      translation,
-      bookId,
-      chapterId,
+      translation: nav.translation,
+      bookId: nav.bookId,
+      chapterId: nav.chapterId,
       verse: activeVerseNumber,
-      fontSize,
-      fontFamily,
-      lineSpacing,
+      fontSize: prefs.fontSize,
+      fontFamily: prefs.fontFamily,
+      lineSpacing: prefs.lineSpacing,
     };
 
-    window.localStorage.setItem("abide_bible_progress", JSON.stringify(progress));
+    window.localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
 
-    const saveKey = `${progress.translation}|${progress.bookId}|${progress.chapterId}|${progress.verse}|${fontSize}|${fontFamily}|${lineSpacing}`;
-    if (lastServerSavedProgressKey === saveKey) return;
-    lastServerSavedProgressKey = saveKey;
+    const saveKey = `${progress.translation}|${progress.bookId}|${progress.chapterId}|${progress.verse}|${prefs.fontSize}|${prefs.fontFamily}|${prefs.lineSpacing}`;
+    if (lastSavedKeyRef.current === saveKey) return;
+    lastSavedKeyRef.current = saveKey;
 
-    void (async () => {
+    async function persistToServer() {
       try {
         const token = await getAccessToken();
         if (!token) return;
         await saveBibleProgress(token, progress);
       } catch {
-        lastServerSavedProgressKey = null;
+        lastSavedKeyRef.current = null;
       }
-    })();
+    }
+
+    persistToServer();
   }, [
-    isBootstrapped,
-    translation,
-    bookId,
-    chapterId,
-    verses,
-    selectedVerseIds,
-    fontSize,
-    fontFamily,
-    lineSpacing,
-    getAccessToken,
+    nav.isBootstrapped,
+    nav.translation,
+    nav.bookId,
+    nav.chapterId,
+    nav.verses,
+    nav.selectedVerseIds,
+    prefs.fontSize,
+    prefs.fontFamily,
+    prefs.lineSpacing,
   ]);
-
-  // Chapter navigation — re-bootstrap with the new chapter
-  const handlePrev = useCallback(() => {
-    if (chapterIndex <= 0) return;
-    const prevId = chapters[chapterIndex - 1].id;
-    void loadBibleBootstrap({
-      translation,
-      preferredBookId: bookId,
-      preferredChapterId: prevId,
-    });
-  }, [chapterIndex, chapters, translation, bookId, loadBibleBootstrap]);
-
-  const handleNext = useCallback(() => {
-    if (chapterIndex < 0 || chapters.length === 0) return;
-
-    // Normal case: next chapter within the same book.
-    if (chapterIndex < chapters.length - 1) {
-      const nextId = chapters[chapterIndex + 1].id;
-      void loadBibleBootstrap({
-        translation,
-        preferredBookId: bookId,
-        preferredChapterId: nextId,
-      });
-      return;
-    }
-
-    // At the last chapter of the current book: move to next book (unless we're already at Revelation).
-    if (atLastChapter && hasNextBook) {
-      const nextBookId = books[bookIndex + 1]?.id;
-      if (!nextBookId) return;
-
-      void loadBibleBootstrap({
-        translation,
-        preferredBookId: nextBookId,
-        preferredChapterId: null,
-      });
-    }
-  }, [
-    atLastChapter,
-    bookIndex,
-    books,
-    chapterIndex,
-    chapters,
-    hasNextBook,
-    translation,
-    bookId,
-    loadBibleBootstrap,
-  ]);
-
-  // Verse actions
-  const handleCopy = async (verse: BibleVerse) => {
-    try {
-      await navigator.clipboard.writeText(`${verse.reference} — ${verse.text}`);
-      toast.success(`Copied ${verse.reference}`);
-    } catch {
-      toast.error("Copy failed");
-    }
-  };
-
-  const handleOpenNote = (ref: string, verseNum: number) => {
-    if (selectedVerseIds.length > 1) {
-      const selectedVersesData = verses.filter(v => selectedVerseIds.includes(v.reference));
-      const nums = selectedVersesData.map(v => v.verse);
-      const min = Math.min(...nums);
-      const max = Math.max(...nums);
-      
-      const rangeRef = `${bookId.toUpperCase()} ${selectedChapter?.number}:${min}${min !== max ? `-${max}` : ''}`;
-      setActiveVerseForNote(rangeRef);
-      setActiveVerseNumForNote(min);
-      setActiveVerseNumEndForNote(max);
-    } else {
-      setActiveVerseForNote(ref);
-      setActiveVerseNumForNote(verseNum);
-      setActiveVerseNumEndForNote(verseNum);
-    }
-    setNoteDraft("");
-    setEditingNoteId(null);
-    setIsNotesOpen(true);
-  };
-
-  const handleNoteAction = useCallback(() => {
-    if (selectedVerseIds.length === 0) return;
-    const firstRef = selectedVerseIds[0];
-    const verseNum = verses.find((v) => v.reference === firstRef)?.verse ?? 1;
-    handleOpenNote(firstRef, verseNum);
-  }, [selectedVerseIds, verses, handleOpenNote]);
-
-  const handleEditNote = (note: BibleNote) => {
-    setActiveVerseForNote(
-      `${bookId.toUpperCase()} ${selectedChapter?.number}:${note.verse_start}${
-        note.verse_end && note.verse_end !== note.verse_start ? `-${note.verse_end}` : ""
-      }`
-    );
-    setActiveVerseNumForNote(note.verse_start);
-    setActiveVerseNumEndForNote(note.verse_end || note.verse_start);
-    setNoteDraft(note.content);
-    setEditingNoteId(note.id);
-    setIsNotesOpen(true);
-  };
-
-  const handleSaveNote = async () => {
-    if (!activeVerseForNote || activeVerseNumForNote === null || !noteDraft.trim()) return;
-    
-    const token = await getAccessToken();
-    if (!token) return;
-
-    const input = {
-      id: editingNoteId,
-      translation,
-      bookId,
-      chapterId: chapterId,
-      verseStart: activeVerseNumForNote,
-      verseEnd: activeVerseNumEndForNote || activeVerseNumForNote,
-      content: noteDraft.trim(),
-    };
-
-    // Optimistic cleanup of draft but wait for Result for Realtime sync or manual update
-    const saved = await saveBibleNote(token, input);
-    
-    if (saved) {
-      if (!editingNoteId) {
-        setNotes(prev => [saved, ...prev]);
-        toast.success("Note saved");
-      } else {
-        setNotes(prev => prev.map(n => n.id === saved.id ? saved : n));
-        toast.success("Note updated");
-      }
-    }
-
-    setNoteDraft("");
-    setEditingNoteId(null);
-    setActiveVerseForNote(null);
-    setActiveVerseNumForNote(null);
-    setActiveVerseNumEndForNote(null);
-    setIsNotesOpen(false);
-  };
-
-  const handleDeleteNote = async (noteId: string) => {
-    const token = await getAccessToken();
-    if (!token) return;
-
-    setNotes((prev) => prev.filter((n) => n.id !== noteId));
-    try {
-      await deleteBibleNote(token, noteId);
-      toast.success("Note deleted");
-    } catch {
-      toast.error("Delete failed");
-    }
-  };
-
-  const handleBulkHighlight = async (color: string) => {
-    if (selectedVerseIds.length === 0) return;
-    
-    const token = await getAccessToken();
-    if (!token) return;
-
-    const selectedVersesData = verses.filter(v => selectedVerseIds.includes(v.reference));
-    const selectedNums = selectedVersesData.map(v => v.verse);
-    
-    const allMatching = selectedNums.every(num => {
-      const h = highlights.find(h => h.verse_start === num);
-      return h && h.color === color;
-    });
-
-    if (allMatching) {
-      const highlightsToRemove = highlights.filter(h => selectedNums.includes(h.verse_start));
-      const idsToRemove = highlightsToRemove.map(h => h.id);
-      
-      setHighlights(prev => prev.filter(h => !idsToRemove.includes(h.id)));
-      await bulkDeleteBibleHighlights(token, idsToRemove);
-      toast.success("Highlights removed");
-    } else {
-      const itemsToClear = highlights.filter(h => selectedNums.includes(h.verse_start));
-      const idsToClear = itemsToClear.map(h => h.id);
-      
-      if (idsToClear.length > 0) {
-        await bulkDeleteBibleHighlights(token, idsToClear);
-      }
-
-      const inputs = selectedVersesData.map(v => ({
-        translation,
-        bookId,
-        chapterId,
-        verseStart: v.verse,
-        verseEnd: v.verse,
-        color
-      }));
-
-      const newHighlights = await bulkSaveBibleHighlights(token, inputs);
-
-      setHighlights(prev => {
-        const others = prev.filter(h => !selectedNums.includes(h.verse_start));
-        return [...others, ...newHighlights];
-      });
-      toast.success(`Highlighted ${selectedVerseIds.length} ${selectedVerseIds.length === 1 ? 'verse' : 'verses'}`);
-    }
-  };
-
-  const handleBulkFavorite = async () => {
-    if (selectedVerseIds.length === 0) return;
-    
-    const token = await getAccessToken();
-    if (!token) return;
-
-    const selectedVersesData = verses.filter(v => selectedVerseIds.includes(v.reference));
-    const selectedNums = selectedVersesData.map(v => v.verse);
-    
-    const allFavorited = selectedNums.every(num => 
-      favorites.some(f => f.verse_start === num)
-    );
-
-    if (allFavorited) {
-      const favoritesToRemove = favorites.filter(f => selectedNums.includes(f.verse_start));
-      const idsToRemove = favoritesToRemove.map(f => f.id);
-      setFavorites(prev => prev.filter(f => !idsToRemove.includes(f.id)));
-      await bulkDeleteBibleFavorites(token, idsToRemove);
-      toast.success("Removed from favorites");
-    } else {
-      // Clear existing for these verses to avoid duplicates
-      const itemsToClear = favorites.filter(f => selectedNums.includes(f.verse_start));
-      if (itemsToClear.length > 0) {
-        await bulkDeleteBibleFavorites(token, itemsToClear.map(f => f.id));
-      }
-
-      const inputs = selectedVersesData.map(v => ({
-        translation,
-        bookId,
-        chapterId,
-        verseStart: v.verse,
-        verseEnd: v.verse,
-        verseReference: v.reference,
-        verseText: v.text,
-      }));
-
-      const newFavorites = await bulkSaveBibleFavorites(token, inputs);
-      setFavorites(prev => {
-        const others = prev.filter(f => !selectedNums.includes(f.verse_start));
-        return [...others, ...newFavorites];
-      });
-      toast.success("Added to favorites");
-    }
-  };
-
-  const handleBulkCopy = async () => {
-    if (selectedVerseIds.length === 0) return;
-    const selectedVersesData = verses
-      .filter(v => selectedVerseIds.includes(v.reference))
-      .sort((a, b) => a.verse - b.verse);
-    
-    const text = selectedVersesData.map(v => `${v.verse} ${v.text}`).join('\n');
-    const label = `${chapterLabel}:${selectedVersesData[0].verse}${selectedVersesData.length > 1 ? `-${selectedVersesData[selectedVersesData.length-1].verse}` : ''}`;
-    
-    try {
-      await navigator.clipboard.writeText(`${label}\n${text}`);
-      toast.success("Copied to clipboard");
-    } catch {
-      toast.error("Copy failed");
-    }
-  };
-
-  const verseTextClasses = cn(
-    "text-ink dark:text-parchment",
-    FONT_SIZE_CLASSES[fontSize],
-    FONT_FAMILY_CLASSES[fontFamily],
-    LINE_SPACING_CLASSES[lineSpacing]
-  );
-
-  const chapterLabel = `${selectedBook?.name ?? "Bible"} ${selectedChapter?.number ?? ""}`;
-  const activeHighlightColor = useMemo(
-    () => getActiveHighlightColor(selectedVerseIds, verses, highlights),
-    [selectedVerseIds, verses, highlights]
-  );
-  const selectedCitation = useMemo(
-    () =>
-      getFormattedSelectionCitation(
-        selectedVerseIds,
-        verses,
-        selectedBook?.name ?? "Bible",
-        selectedChapter?.number ?? "",
-        translation
-      ),
-    [selectedVerseIds, verses, selectedBook?.name, selectedChapter?.number, translation]
-  );
-  const isSelectionFavorited = useMemo(
-    () =>
-      selectedVerseIds.length > 0 &&
-      selectedVerseIds.every((id) => {
-        const vNum = verses.find((v) => v.reference === id)?.verse;
-        return favorites.some((f) => f.verse_start === vNum);
-      }),
-    [selectedVerseIds, verses, favorites]
-  );
-
-  // Event dispatches for TopBar / BottomNav
-  useEffect(() => {
-    window.dispatchEvent(
-      new CustomEvent("abide:bible-header", {
-        detail: { chapterLabel, translation },
-      })
-    );
-  }, [chapterLabel, translation]);
-
-  useEffect(() => {
-    window.dispatchEvent(
-      new CustomEvent("abide:bible-bottom-nav", {
-        detail: {
-          chapterLabel,
-          canPrev: chapterIndex > 0,
-          canNext:
-            (chapterIndex >= 0 && chapterIndex < chapters.length - 1) ||
-            (atLastChapter && hasNextBook),
-        },
-      })
-    );
-  }, [chapterLabel, chapterIndex, chapters.length, atLastChapter, hasNextBook]);
-
-  // Event listeners for TopBar / BottomNav actions
-  useEffect(() => {
-    const handleOpenNav = () => setIsNavSheetOpen(true);
-    window.addEventListener("abide:bible-open-nav-sheet", handleOpenNav);
-    return () => window.removeEventListener("abide:bible-open-nav-sheet", handleOpenNav);
-  }, []);
-
-  useEffect(() => {
-    const onPrevChapter = () => handlePrev();
-    const onNextChapter = () => handleNext();
-    window.addEventListener("abide:bible-prev-chapter", onPrevChapter);
-    window.addEventListener("abide:bible-next-chapter", onNextChapter);
-    return () => {
-      window.removeEventListener("abide:bible-prev-chapter", onPrevChapter);
-      window.removeEventListener("abide:bible-next-chapter", onNextChapter);
-    };
-  }, [handleNext, handlePrev]);
-
-  useEffect(() => {
-    if (selectedVerseIds.length !== 1 || isLoading) return;
-    const ref = selectedVerseIds[0];
-    const sanitized = ref.replace(/[:\s]/g, "-");
-    const timer = setTimeout(() => {
-      const el = document.getElementById(`verse-${sanitized}`);
-      if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [selectedVerseIds, isLoading]);
-
-  // Settings sheet actions — re-bootstrap when translation, book, or chapter changes
-  const handleTranslationChange = useCallback(
-    (newTranslation: Translation) => {
-      void loadBibleBootstrap({
-        translation: newTranslation,
-        preferredBookId: null,
-        preferredChapterId: null,
-      });
-    },
-    [loadBibleBootstrap]
-  );
-
-  const handleBookChange = useCallback(
-    (newBookId: string) => {
-      void loadBibleBootstrap({
-        translation,
-        preferredBookId: newBookId,
-        preferredChapterId: null,
-      });
-    },
-    [translation, loadBibleBootstrap]
-  );
-
-  const handleChapterChange = useCallback(
-    (newChapterId: string) => {
-      void loadBibleBootstrap({
-        translation,
-        preferredBookId: bookId,
-        preferredChapterId: newChapterId,
-      });
-    },
-    [translation, bookId, loadBibleBootstrap]
-  );
 
   return {
-    // Data
-    translation,
-    books,
-    bookId,
-    chapters,
-    chapterId,
-    verses,
-    isLoading,
-    error,
-    selectedBook,
-    selectedChapter,
-    chapterIndex,
+    // Navigation
+    translation: nav.translation,
+    books: nav.books,
+    bookId: nav.bookId,
+    chapters: nav.chapters,
+    chapterId: nav.chapterId,
+    verses: nav.verses,
+    isLoading: nav.isLoading,
+    error: nav.error,
+    selectedBook: nav.selectedBook,
+    selectedChapter: nav.selectedChapter,
+    chapterIndex: nav.chapterIndex,
+    isBootstrapped: nav.isBootstrapped,
+    isNavSheetOpen: nav.isNavSheetOpen,
+    setIsNavSheetOpen: nav.setIsNavSheetOpen,
+    selectedVerseIds: nav.selectedVerseIds,
+    setSelectedVerseIds: nav.setSelectedVerseIds,
+    handlePrev: nav.handlePrev,
+    handleNext: nav.handleNext,
+    handleTranslationChange: nav.handleTranslationChange,
+    handleBookChange: nav.handleBookChange,
+    handleChapterChange: nav.handleChapterChange,
 
     // Preferences
-    fontSize,
-    fontFamily,
-    lineSpacing,
-    verseTextClasses,
-    activeHighlightColor,
-    selectedCitation,
-    isSelectionFavorited,
+    fontSize: prefs.fontSize,
+    setFontSize: prefs.setFontSize,
+    fontFamily: prefs.fontFamily,
+    setFontFamily: prefs.setFontFamily,
+    lineSpacing: prefs.lineSpacing,
+    setLineSpacing: prefs.setLineSpacing,
+    verseTextClasses: prefs.verseTextClasses,
 
-    // UI state
-    isNavSheetOpen,
-    isNotesOpen,
-    notes,
-    highlights,
-    favorites,
-    activeVerseForNote,
-    selectedVerseIds,
-    noteDraft,
-    activeVerseNumForNote,
-    activeVerseNumEndForNote,
-    editingNoteId,
-    isBootstrapped,
-
-    // Setters
-    setFontSize,
-    setFontFamily,
-    setLineSpacing,
-    setIsNavSheetOpen,
-    setIsNotesOpen,
-    setSelectedVerseIds,
-    setNoteDraft,
-    setActiveVerseForNote,
-    setActiveVerseNumForNote,
-    setActiveVerseNumEndForNote,
-    setEditingNoteId,
-
-    // Handlers
-    handlePrev,
-    handleNext,
-    handleCopy,
-    handleOpenNote,
-    handleNoteAction,
-    handleEditNote,
-    handleSaveNote,
-    handleDeleteNote,
-    handleBulkHighlight,
-    handleBulkFavorite,
-    handleBulkCopy,
-    handleTranslationChange,
-    handleBookChange,
-    handleChapterChange,
+    // Annotations
+    notes: annotations.notes,
+    highlights: annotations.highlights,
+    favorites: annotations.favorites,
+    activeHighlightColor: annotations.activeHighlightColor,
+    selectedCitation: annotations.selectedCitation,
+    isSelectionFavorited: annotations.isSelectionFavorited,
+    isNotesOpen: annotations.isNotesOpen,
+    setIsNotesOpen: annotations.setIsNotesOpen,
+    activeVerseForNote: annotations.activeVerseForNote,
+    setActiveVerseForNote: annotations.setActiveVerseForNote,
+    activeVerseNumForNote: annotations.activeVerseNumForNote,
+    setActiveVerseNumForNote: annotations.setActiveVerseNumForNote,
+    activeVerseNumEndForNote: annotations.activeVerseNumEndForNote,
+    setActiveVerseNumEndForNote: annotations.setActiveVerseNumEndForNote,
+    noteDraft: annotations.noteDraft,
+    setNoteDraft: annotations.setNoteDraft,
+    editingNoteId: annotations.editingNoteId,
+    setEditingNoteId: annotations.setEditingNoteId,
+    handleCopy: annotations.handleCopy,
+    handleOpenNote: annotations.handleOpenNote,
+    handleNoteAction: annotations.handleNoteAction,
+    handleEditNote: annotations.handleEditNote,
+    handleSaveNote: annotations.handleSaveNote,
+    handleDeleteNote: annotations.handleDeleteNote,
+    handleBulkHighlight: annotations.handleBulkHighlight,
+    handleBulkFavorite: annotations.handleBulkFavorite,
+    handleBulkCopy: annotations.handleBulkCopy,
   };
 }
 
