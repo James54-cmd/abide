@@ -26,6 +26,44 @@ import {
   Translation,
 } from "@/features/bible/types";
 
+type BibleNotePayload = {
+  id: string;
+  translation: string;
+  bookId: string;
+  chapterId: string;
+  verseStart: number;
+  verseEnd: number;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type BibleHighlightPayload = {
+  id: string;
+  translation: string;
+  bookId: string;
+  chapterId: string;
+  verseStart: number;
+  verseEnd: number;
+  color: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type BibleFavoritePayload = {
+  id: string;
+  translation: string;
+  bookId: string;
+  bookName: string;
+  chapterId: string;
+  verseStart: number;
+  verseEnd: number;
+  verseReference: string;
+  verseText: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type BibleBootstrapPayload = {
   translation: string;
   books: BibleBook[];
@@ -90,7 +128,7 @@ export async function saveBibleNote(
   }
 ) {
   const client = getApolloClient();
-  const { data } = await client.mutate<{ saveBibleNote: any }>({
+  const { data } = await client.mutate<{ saveBibleNote: BibleNotePayload }>({
     mutation: SAVE_BIBLE_NOTE_MUTATION,
     variables: { input },
     context: { headers: { Authorization: `Bearer ${token}` } },
@@ -135,7 +173,7 @@ export async function bulkSaveBibleNotes(
   }[]
 ) {
   const client = getApolloClient();
-  const { data } = await client.mutate<{ bulkSaveBibleNotes: any[] }>({
+  const { data } = await client.mutate<{ bulkSaveBibleNotes: BibleNotePayload[] }>({
     mutation: BULK_SAVE_BIBLE_NOTES_MUTATION,
     variables: { inputs },
     context: { headers: { Authorization: `Bearer ${token}` } },
@@ -180,7 +218,7 @@ export async function saveBibleHighlight(
   }
 ) {
   const client = getApolloClient();
-  const { data } = await client.mutate<{ saveBibleHighlight: any }>({
+  const { data } = await client.mutate<{ saveBibleHighlight: BibleHighlightPayload }>({
     mutation: SAVE_BIBLE_HIGHLIGHT_MUTATION,
     variables: { input },
     context: { headers: { Authorization: `Bearer ${token}` } },
@@ -215,7 +253,7 @@ export async function deleteBibleHighlight(
 
 export async function fetchBibleFavorites(token: string) {
   const client = getApolloClient();
-  const { data } = await client.query<{ bibleFavorites: any[] }>({
+  const { data } = await client.query<{ bibleFavorites: BibleFavoritePayload[] }>({
     query: BIBLE_FAVORITES_QUERY,
     context: { headers: { Authorization: `Bearer ${token}` } },
     fetchPolicy: "no-cache"
@@ -251,7 +289,7 @@ export async function saveBibleFavorite(
   }
 ) {
   const client = getApolloClient();
-  const { data } = await client.mutate<{ saveBibleFavorite: any }>({
+  const { data } = await client.mutate<{ saveBibleFavorite: BibleFavoritePayload }>({
     mutation: SAVE_BIBLE_FAVORITE_MUTATION,
     variables: { input },
     context: { headers: { Authorization: `Bearer ${token}` } },
@@ -298,7 +336,7 @@ export async function bulkSaveBibleFavorites(
   }[]
 ) {
   const client = getApolloClient();
-  const { data } = await client.mutate<{ bulkSaveBibleFavorites: any[] }>({
+  const { data } = await client.mutate<{ bulkSaveBibleFavorites: BibleFavoritePayload[] }>({
     mutation: BULK_SAVE_BIBLE_FAVORITES_MUTATION,
     variables: { inputs },
     context: { headers: { Authorization: `Bearer ${token}` } },
@@ -344,7 +382,7 @@ export async function bulkSaveBibleHighlights(
   }[]
 ) {
   const client = getApolloClient();
-  const { data } = await client.mutate<{ bulkSaveBibleHighlights: any[] }>({
+  const { data } = await client.mutate<{ bulkSaveBibleHighlights: BibleHighlightPayload[] }>({
     mutation: BULK_SAVE_BIBLE_HIGHLIGHTS_MUTATION,
     variables: { inputs },
     context: { headers: { Authorization: `Bearer ${token}` } },

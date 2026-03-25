@@ -14,11 +14,26 @@ export default function VerifyPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isVerifiedLocally, setIsVerifiedLocally] = useState(false);
+  const [verificationStatus, setVerificationStatus] = useState<"verified" | "pending" | null>(null);
 
   useEffect(() => {
     let pollInterval: NodeJS.Timeout;
     const supabase = getSupabaseBrowserClient();
-    let channel: any;
+    type RemoveChannelArg = Parameters<typeof supabase.removeChannel>[0];
+    let channel: RemoveChannelArg | null = null;
+
+    type ProfileUpdatePayload = {
+      new?: {
+        verification_status?: unknown;
+      };
+    };
+
+    function isProfileUpdatePayload(payload: unknown): payload is ProfileUpdatePayload {
+      if (typeof payload !== "object" || payload === null) return false;
+      if (!("new" in payload)) return false;
+      const maybeNew = (payload as { new?: unknown }).new;
+      return typeof maybeNew === "object" && maybeNew !== null;
+    }
 
     const checkUser = async () => {
       const searchParams = new URLSearchParams(window.location.search);
@@ -31,16 +46,22 @@ export default function VerifyPage() {
       
       if (user) {
         // 1. Initial check
-        const { data: profile } = await (supabase
+        const { data: rawProfile } = await (supabase
           .from("profiles")
           .select("verification_status")
           .eq("id", user.id)
-          .single() as any);
-        
+          .single());
+
+        const profile = rawProfile as unknown as { verification_status?: string } | null;
+
         if (profile?.verification_status === "verified") {
           setIsVerifiedLocally(true);
+          setVerificationStatus("verified");
           setTimeout(() => router.replace("/"), 1000);
           return;
+        }
+        if (profile?.verification_status === "pending") {
+          setVerificationStatus("pending");
         }
         setEmail(user.email ?? null);
 
@@ -55,10 +76,15 @@ export default function VerifyPage() {
               table: "profiles",
               filter: `id=eq.${user.id}`,
             },
-            (payload: any) => {
-              if (payload.new?.verification_status === "verified") {
-                setIsVerifiedLocally(true);
-                setTimeout(() => router.replace("/"), 1000);
+            (payload: unknown) => {
+              if (isProfileUpdatePayload(payload)) {
+                const status = payload.new?.verification_status;
+                if (status === "verified") {
+                  setIsVerifiedLocally(true);
+                  setTimeout(() => router.replace("/"), 1000);
+                } else if (status === "pending") {
+                  setVerificationStatus("pending");
+                }
               }
             }
           )
@@ -74,11 +100,20 @@ export default function VerifyPage() {
 
         try {
           const res = await fetch(`/api/auth/verify-status?email=${encodeURIComponent(currentEmail)}`);
-          const data = await res.json();
-          
-          if (data.status === "verified") {
+          const json: unknown = await res.json();
+
+          const status =
+            typeof json === "object" &&
+            json !== null &&
+            "status" in json &&
+            typeof (json as { status?: unknown }).status === "string"
+              ? (json as { status: string }).status
+              : null;
+
+          if (status === "verified") {
             clearInterval(pollInterval);
             setIsVerifiedLocally(true);
+            setVerificationStatus("verified");
 
             const storedPassword = sessionStorage.getItem("abide_pending_password");
             if (storedPassword && currentEmail) {
@@ -97,6 +132,8 @@ export default function VerifyPage() {
                 }
             }
             setTimeout(() => router.replace("/"), 1000);
+          } else if (status === "pending") {
+            setVerificationStatus("pending");
           }
         } catch (err) {
           // Ignore poll errors
@@ -169,6 +206,11 @@ export default function VerifyPage() {
           <p className="text-sm text-muted">
             We sent a secure link to <span className="font-medium text-ink dark:text-parchment">{email}</span>. Click it to confirm your account.
           </p>
+          {verificationStatus === "pending" ? (
+            <div className="inline-flex items-center justify-center rounded-full bg-gold/10 border border-gold/10 px-3 py-1 text-xs font-semibold text-gold">
+              Status: Pending verification
+            </div>
+          ) : null}
         </div>
 
         <div className="space-y-3 pt-4">

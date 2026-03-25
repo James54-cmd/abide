@@ -153,21 +153,21 @@ export function useBibleState() {
 
           const [hRes, nRes, fRes] = await Promise.all([
             supabase
-              .from("bible_highlights" as any)
+              .from("bible_highlights")
               .select("*")
               .eq("user_id", user.id)
               .eq("translation", payload.translation)
               .eq("book_id", payload.selectedBookId)
               .eq("chapter_id", payload.selectedChapterId),
             supabase
-              .from("bible_notes" as any)
+              .from("bible_notes")
               .select("*")
               .eq("user_id", user.id)
               .eq("translation", payload.translation)
               .eq("book_id", payload.selectedBookId)
               .eq("chapter_id", payload.selectedChapterId),
             supabase
-              .from("bible_favorites" as any)
+              .from("bible_favorites")
               .select("*")
               .eq("user_id", user.id)
               .eq("translation", payload.translation)

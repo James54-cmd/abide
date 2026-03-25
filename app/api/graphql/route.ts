@@ -1132,7 +1132,18 @@ const resolvers = {
     },
     saveBibleFavorite: async (
       _: unknown,
-      args: { input: any },
+      args: {
+        input: {
+          translation: string;
+          bookId: string;
+          chapterId: string;
+          verseStart: number;
+          verseEnd: number;
+          verseReference: string;
+          verseText: string;
+          id?: string | null;
+        };
+      },
       context: GraphQlContext
     ) => {
       const { user, supabase } = await requireUserFromAuthHeader(context.authHeader);
@@ -1189,7 +1200,22 @@ const resolvers = {
       if (error) throw error;
       return true;
     },
-    bulkSaveBibleFavorites: async (_: unknown, args: { inputs: any[] }, context: GraphQlContext) => {
+    bulkSaveBibleFavorites: async (
+      _: unknown,
+      args: {
+        inputs: Array<{
+          translation: string;
+          bookId: string;
+          chapterId: string;
+          verseStart: number;
+          verseEnd: number;
+          verseReference: string;
+          verseText: string;
+          id?: string | null;
+        }>;
+      },
+      context: GraphQlContext
+    ) => {
       const { user, supabase } = await requireUserFromAuthHeader(context.authHeader);
       const translations = Array.from(
         new Set(
