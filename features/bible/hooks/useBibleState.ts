@@ -6,6 +6,7 @@ import {
   fetchBibleBootstrap,
   saveBibleProgress,
 } from "@/lib/graphql/bible/hooks";
+import { toast } from "sonner";
 import type {
   Translation,
   FontSize,
@@ -50,7 +51,6 @@ export function useBibleState() {
   const [activeVerseNumForNote, setActiveVerseNumForNote] = useState<number | null>(null);
   const [selectedVerseIds, setSelectedVerseIds] = useState<string[]>([]);
   const [noteDraft, setNoteDraft] = useState("");
-  const [toast, setToast] = useState<string | null>(null);
   const [isBootstrapped, setIsBootstrapped] = useState(false);
 
   const selectedBook = useMemo(() => books.find((b) => b.id === bookId) ?? null, [books, bookId]);
@@ -236,13 +236,6 @@ export function useBibleState() {
     })();
   }, [isBootstrapped, translation, bookId, chapterId, verses, selectedVerseIds, getAccessToken]);
 
-  // Toast auto-dismiss
-  useEffect(() => {
-    if (!toast) return;
-    const t = window.setTimeout(() => setToast(null), 1800);
-    return () => window.clearTimeout(t);
-  }, [toast]);
-
   // Chapter navigation — re-bootstrap with the new chapter
   const handlePrev = useCallback(() => {
     if (chapterIndex <= 0) return;
@@ -268,9 +261,9 @@ export function useBibleState() {
   const handleCopy = async (verse: BibleVerse) => {
     try {
       await navigator.clipboard.writeText(`${verse.reference} — ${verse.text}`);
-      setToast(`Copied ${verse.reference}`);
+      toast.success(`Copied ${verse.reference}`);
     } catch {
-      setToast("Copy failed");
+      toast.error("Copy failed");
     }
   };
 
@@ -327,7 +320,7 @@ export function useBibleState() {
     setNoteDraft("");
     setActiveVerseForNote(null);
     setActiveVerseNumForNote(null);
-    setToast("Note saved");
+    toast.success("Note saved");
   };
 
   const handleDeleteNote = async (noteId: string) => {
@@ -339,7 +332,7 @@ export function useBibleState() {
     
     if (!error) {
       setNotes((prev) => prev.filter((n) => n.id !== noteId));
-      setToast("Note deleted");
+      toast.success("Note deleted");
     }
   };
 
@@ -366,7 +359,7 @@ export function useBibleState() {
       const { error } = await supabase.from("bible_highlights" as any).delete().in("id", idsToRemove);
       if (!error) {
         setHighlights(prev => prev.filter(h => !idsToRemove.includes(h.id)));
-        setToast("Highlights removed");
+        toast.success("Highlights removed");
       }
     } else {
       // Clear existing for these verses first
@@ -398,7 +391,7 @@ export function useBibleState() {
           const others = prev.filter(h => !selectedNums.includes(h.verse_start));
           return [...others, ...(data as unknown as BibleHighlight[])];
         });
-        setToast(`Highlighted ${selectedVerseIds.length} verses`);
+        toast.success(`Highlighted ${selectedVerseIds.length} ${selectedVerseIds.length === 1 ? 'verse' : 'verses'}`);
       }
     }
   };
@@ -414,9 +407,9 @@ export function useBibleState() {
     
     try {
       await navigator.clipboard.writeText(`${label}\n${text}`);
-      setToast("Copied to clipboard");
+      toast.success("Copied to clipboard");
     } catch {
-      setToast("Copy failed");
+      toast.error("Copy failed");
     }
   };
 
@@ -530,7 +523,6 @@ export function useBibleState() {
     activeVerseForNote,
     selectedVerseIds,
     noteDraft,
-    toast,
     activeVerseNumForNote,
     isBootstrapped,
 

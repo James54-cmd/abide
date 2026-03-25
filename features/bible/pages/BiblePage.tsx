@@ -36,20 +36,6 @@ export default function BiblePage() {
     <PageTransition>
       <div className="bg-parchment dark:bg-dark-bg min-h-screen pb-20">
         <main>
-          <AnimatePresence mode="wait">
-            {state.toast ? (
-              <motion.div
-                key="toast"
-                initial={{ opacity: 0, y: -6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                className="sticky top-0 z-30 flex justify-center py-2"
-              >
-                <span className="text-xs bg-gold text-white rounded-full px-3 py-1 shadow-sm font-medium">{state.toast}</span>
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
-
           <div className="px-5 py-6">
             {state.error ? (
               <p className="text-xs text-red-600 text-center">{state.error}</p>
