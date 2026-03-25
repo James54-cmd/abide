@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Cross, Menu, User, X } from "lucide-react";
+import { Cross, Menu, MessageSquare, Plus, User, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
@@ -142,7 +142,7 @@ export default function TopBar() {
       {isBiblePage ? (
         <div className="bg-parchment/95 dark:bg-dark-bg/95 backdrop-blur-sm border-t border-gold/10 px-4 py-3 flex items-center justify-between">
           <div>
-            <h1 className="font-serif text-xl font-bold text-ink dark:text-parchment leading-tight">
+            <h1 className="font-serif text-xl font-bold text-ink dark:text-parchment leading-tight truncate max-w-[240px]">
               {bibleHeader.chapterLabel}
             </h1>
             <p className="text-[11px] text-muted tracking-wide uppercase">
@@ -159,45 +159,53 @@ export default function TopBar() {
         </div>
       ) : null}
       {isChatPage ? (
-        <div className="bg-parchment/95 dark:bg-dark-bg/95 backdrop-blur-sm border-t border-gold/10 px-4 py-2.5 space-y-2">
+        <div className="bg-parchment/95 dark:bg-dark-bg/95 backdrop-blur-sm border-t border-gold/10 px-4 py-3 space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="font-serif text-base font-semibold text-ink dark:text-parchment">
-              Conversations
-            </h2>
+            <div className="flex items-center gap-2">
+               <MessageSquare className="w-4 h-4 text-gold/60" />
+               <h2 className="font-serif text-sm font-black text-black dark:text-parchment/60 uppercase tracking-[0.2em]">
+                 Conversations
+               </h2>
+            </div>
             <button
               onClick={handleNewChat}
-              className="rounded-full bg-gold text-white text-xs font-semibold px-3 py-1.5"
+              className="group flex items-center gap-1.5 rounded-full bg-gold hover:bg-gold/90 text-white text-[11px] font-bold px-3 py-1.5 transition-all shadow-md shadow-gold/20 active:scale-95"
             >
+              <Plus className="w-3 h-3 group-hover:rotate-90 transition-transform duration-300" />
               New chat
             </button>
           </div>
-          <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+          <div className="flex gap-2 overflow-x-auto scrollbar-hide px-1 -my-1">
             {chatTopbar.conversations.map((conversation) => (
               <div
                 key={conversation.id}
-                className={`flex-shrink-0 inline-flex items-center rounded-full text-xs border transition-colors ${
+                className={cn(
+                  "flex-shrink-0 inline-flex items-center rounded-xl text-xs border transition-all duration-300",
                   chatTopbar.activeConversationId === conversation.id
-                    ? "bg-gold text-white border-gold"
-                    : "bg-white dark:bg-dark-card text-muted border-gold/10"
-                }`}
+                    ? "bg-gold text-white border-gold shadow-lg shadow-gold/25 scale-[1.02]"
+                    : "bg-white/60 dark:bg-dark-card/60 text-muted border-gold/10 hover:border-gold/30 hover:bg-white dark:hover:bg-dark-card"
+                )}
               >
                 <button
                   onClick={() => handleSelectConversation(conversation.id)}
-                  className="px-3 py-1.5"
+                  className="px-4 py-2 font-medium tracking-tight truncate max-w-[140px]"
                 >
                   {conversation.title}
                 </button>
                 <button
                   onClick={() => handleDeleteConversation(conversation.id)}
                   className={cn(
-                    "mr-1 p-1 rounded-full transition-colors",
+                    "mr-1 p-1.5 rounded-lg transition-colors group/delete",
                     chatTopbar.activeConversationId === conversation.id
-                      ? "hover:bg-white/20"
-                      : "hover:bg-gold/10"
+                      ? "hover:bg-white/20 text-white/60 hover:text-white"
+                      : "hover:bg-red-50 text-muted/30 hover:text-red-500"
                   )}
                   aria-label={`Delete ${conversation.title}`}
                 >
-                  <X className="w-3 h-3" />
+                  <X className={cn(
+                    "w-3 h-3",
+                    chatTopbar.activeConversationId === conversation.id ? "stroke-[2.5]" : "stroke-[1.5]"
+                  )} />
                 </button>
               </div>
             ))}
