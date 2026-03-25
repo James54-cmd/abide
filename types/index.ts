@@ -5,6 +5,11 @@ export interface Verse {
 
 export interface EncouragementResponse {
   intro: string;
+  character?: {
+    name: string;
+    story: string;
+    connection: string;
+  };
   verses: Verse[];
   closing: string;
 }

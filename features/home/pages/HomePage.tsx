@@ -20,7 +20,7 @@ function timeAgo(date: Date): string {
 
 export default function HomePage() {
   const router = useRouter();
-  const { greeting } = useHomeState();
+  const { greeting, conversations, isLoading } = useHomeState();
 
   const handleSend = (message: string) => {
     router.push(`/chat?q=${encodeURIComponent(message)}`);
@@ -57,28 +57,37 @@ export default function HomePage() {
             Recent Encouragements
           </h3>
           <div className="space-y-2">
-            {mockConversations.map((conv) => (
-              <button
-                key={conv.id}
-                onClick={() => router.push("/chat")}
-                className="w-full flex items-center justify-between bg-white dark:bg-dark-card rounded-2xl px-4 py-3.5 shadow-warm border border-gold/5 transition-all active:scale-[0.98]"
-              >
-                <div className="text-left min-w-0 flex-1">
-                  <p className="text-sm font-medium text-ink dark:text-parchment truncate">
-                    {conv.preview}
-                  </p>
-                  <p className="text-xs text-muted mt-0.5 truncate">
-                    {conv.lastMessage}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1 flex-shrink-0 ml-3">
-                  <span className="text-[10px] text-muted">
-                    {timeAgo(conv.timestamp)}
-                  </span>
-                  <ChevronRight className="w-4 h-4 text-muted" />
-                </div>
-              </button>
-            ))}
+            {isLoading ? (
+              <div className="space-y-2 animate-pulse">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="h-16 bg-white/50 dark:bg-dark-card/50 rounded-2xl" />
+                ))}
+              </div>
+            ) : conversations.length > 0 ? (
+              conversations.map((conv) => (
+                <button
+                  key={conv.id}
+                  onClick={() => router.push(`/chat?id=${conv.id}`)}
+                  className="w-full flex items-center justify-between bg-white dark:bg-dark-card rounded-2xl px-4 py-3.5 shadow-warm border border-gold/5 transition-all active:scale-[0.98]"
+                >
+                  <div className="text-left min-w-0 flex-1">
+                    <p className="text-sm font-medium text-ink dark:text-parchment truncate">
+                      {conv.title}
+                    </p>
+                    <p className="text-xs text-muted mt-0.5 truncate italic">
+                      Updated {timeAgo(new Date(conv.updated_at))}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0 ml-3">
+                    <ChevronRight className="w-4 h-4 text-muted" />
+                  </div>
+                </button>
+              ))
+            ) : (
+              <p className="text-sm text-muted italic text-center py-4">
+                No recent encouragements yet.
+              </p>
+            )}
           </div>
         </div>
       </div>

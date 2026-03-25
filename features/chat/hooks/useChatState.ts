@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import {
   fetchConversations,
@@ -17,6 +18,10 @@ export function useChatState() {
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
+  
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const hasProcessedParams = useRef(false);
 
   const getAccessToken = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
@@ -49,12 +54,82 @@ export function useChatState() {
     return list;
   }, [getAccessToken]);
 
+  const handleSend = useCallback(async (text: string, conversationId: string | null = null) => {
+    const userMsg: ChatMessage = {
+      id: `user-${Date.now()}`,
+      role: "user",
+      content: text,
+      timestamp: new Date(),
+    };
+    setMessages((prev) => [...prev, userMsg]);
+    setIsLoading(true);
+
+    try {
+      const token = await getAccessToken();
+      const currentId = conversationId || activeConversationId;
+      const data = await sendChatMessage(token, text, currentId);
+
+      const aiMsg: ChatMessage = {
+        id: `ai-${Date.now()}`,
+        role: "assistant",
+        content: "",
+        encouragement: data.encouragement,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, aiMsg]);
+
+      if (data.conversationId && !currentId) {
+        setActiveConversationId(data.conversationId);
+      }
+      await loadConversations();
+    } catch {
+      const fallback: ChatMessage = {
+        id: `ai-error-${Date.now()}`,
+        role: "assistant",
+        content: "",
+        encouragement: {
+          intro: "I am having trouble responding right now, but God is still near to you.",
+          verses: [
+            {
+              reference: "Psalm 46:1",
+              text: "God is our refuge and strength, an ever-present help in trouble.",
+            },
+            {
+              reference: "Matthew 11:28",
+              text: "Come to me, all you who are weary and burdened, and I will give you rest.",
+            },
+          ],
+          closing:
+            "Take a deep breath and bring this to the Lord in prayer. You are not alone.",
+        },
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, fallback]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [activeConversationId, getAccessToken, loadConversations]);
+
   // Bootstrap
   useEffect(() => {
+    if (hasProcessedParams.current) return;
+
     const bootstrap = async () => {
       try {
         const list = await loadConversations();
-        if (list.length > 0) {
+        
+        const idParam = searchParams.get("id");
+        const qParam = searchParams.get("q");
+
+        if (idParam) {
+          setActiveConversationId(idParam);
+          await loadMessages(idParam);
+        } else if (qParam) {
+          hasProcessedParams.current = true;
+          // Clear URL params without reloading
+          router.replace("/chat", { scroll: false });
+          void handleSend(qParam, null);
+        } else if (list.length > 0) {
           setActiveConversationId(list[0].id);
           await loadMessages(list[0].id);
         }
@@ -66,7 +141,7 @@ export function useChatState() {
       }
     };
     bootstrap();
-  }, [loadConversations, loadMessages]);
+  }, [loadConversations, loadMessages, searchParams, router, handleSend]);
 
   const handleNewConversation = () => {
     setActiveConversationId(null);
@@ -121,61 +196,6 @@ export function useChatState() {
     window.addEventListener("abide:chat-delete-conversation", onDeleteConversation);
     return () => window.removeEventListener("abide:chat-delete-conversation", onDeleteConversation);
   }, [handleDeleteConversation]);
-
-  const handleSend = useCallback(async (text: string) => {
-    const userMsg: ChatMessage = {
-      id: `user-${Date.now()}`,
-      role: "user",
-      content: text,
-      timestamp: new Date(),
-    };
-    setMessages((prev) => [...prev, userMsg]);
-    setIsLoading(true);
-
-    try {
-      const token = await getAccessToken();
-      const data = await sendChatMessage(token, text, activeConversationId);
-
-      const aiMsg: ChatMessage = {
-        id: `ai-${Date.now()}`,
-        role: "assistant",
-        content: "",
-        encouragement: data.encouragement,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, aiMsg]);
-
-      if (data.conversationId && !activeConversationId) {
-        setActiveConversationId(data.conversationId);
-      }
-      await loadConversations();
-    } catch {
-      const fallback: ChatMessage = {
-        id: `ai-error-${Date.now()}`,
-        role: "assistant",
-        content: "",
-        encouragement: {
-          intro: "I am having trouble responding right now, but God is still near to you.",
-          verses: [
-            {
-              reference: "Psalm 46:1",
-              text: "God is our refuge and strength, an ever-present help in trouble.",
-            },
-            {
-              reference: "Matthew 11:28",
-              text: "Come to me, all you who are weary and burdened, and I will give you rest.",
-            },
-          ],
-          closing:
-            "Take a deep breath and bring this to the Lord in prayer. You are not alone.",
-        },
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, fallback]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [activeConversationId, getAccessToken, loadConversations]);
 
   useEffect(() => {
     const onSend = (event: Event) => {
