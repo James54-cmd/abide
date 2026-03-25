@@ -265,46 +265,67 @@ export async function generateEncouragementForUser(input: {
     historyMessages.pop();
   }
 
-  const completion = await openai.chat.completions.create({
-    model: useRetrieval ? "gpt-4.1" : "gpt-4.1-mini",
-    temperature: 0.6,
-    response_format: {
-      type: "json_schema",
-      json_schema: {
-        name: "encouragement_response",
-        schema: ENCOURAGEMENT_SCHEMA,
-        strict: true,
-      },
-    },
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      {
-        role: "system",
-        content: `Retrieved context:\n${context || "none"}`,
-      },
-      ...historyMessages,
-      {
-        role: "user",
-        content: message,
-      },
-    ],
-  });
+  let encouragement: EncouragementResponse | null = null;
+  let retryCount = 0;
+  const maxRetries = 2;
 
-  const content = completion.choices[0]?.message?.content;
-  if (!content) {
-    throw new Error("No response content from model.");
+  while (retryCount <= maxRetries && !encouragement) {
+    const completion = await openai.chat.completions.create({
+      model: useRetrieval ? "gpt-4o" : "gpt-4o-mini",
+      temperature: retryCount === 0 ? 0.6 : 0.8, // Slightly increase variety on retry
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "encouragement_response",
+          schema: ENCOURAGEMENT_SCHEMA,
+          strict: true,
+        },
+      },
+      max_tokens: 1024,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        {
+          role: "system",
+          content: `Retrieved context:\n${context || "none"}`,
+        },
+        ...historyMessages,
+        {
+          role: "user",
+          content: message,
+        },
+      ],
+    });
+
+    const content = completion.choices[0]?.message?.content;
+    if (!content) {
+      retryCount++;
+      if (retryCount > maxRetries) throw new Error("No response content from model.");
+      continue;
+    }
+
+    try {
+      encouragement = JSON.parse(content) as EncouragementResponse;
+    } catch {
+      const start = content.indexOf("{");
+      const end = content.lastIndexOf("}");
+      if (start === -1 || end === -1 || end <= start) {
+        console.error(`Retry ${retryCount+1}: Model non-JSON. Content:`, content);
+        retryCount++;
+        continue;
+      }
+      const jsonBody = content.slice(start, end + 1);
+      try {
+        encouragement = JSON.parse(jsonBody) as EncouragementResponse;
+      } catch {
+        console.error(`Retry ${retryCount+1}: Invalid JSON structure. Content:`, jsonBody);
+        retryCount++;
+        continue;
+      }
+    }
   }
 
-  let encouragement: EncouragementResponse;
-  try {
-    encouragement = JSON.parse(content) as EncouragementResponse;
-  } catch {
-    const start = content.indexOf("{");
-    const end = content.lastIndexOf("}");
-    if (start === -1 || end === -1 || end <= start) {
-      throw new Error("Model returned non-JSON content.");
-    }
-    encouragement = JSON.parse(content.slice(start, end + 1)) as EncouragementResponse;
+  if (!encouragement) {
+    throw new Error("Model failed to return valid JSON after retries.");
   }
 
   const { error: aiMessageError } = await supabase.from("chat_messages").insert({
