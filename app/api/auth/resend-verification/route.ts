@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (profile.verification_status === "verified") {
-    return NextResponse.json({ error: "Account is already verified." }, { status: 400 });
+    return NextResponse.json({ success: true, alreadyVerified: true });
   }
 
   const lastResentAt = profile.verification_last_resent_at

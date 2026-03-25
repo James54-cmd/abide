@@ -1,26 +1,70 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import AuthShell from "@/components/auth/AuthShell";
+import VerificationSuccessState from "@/components/auth/VerificationSuccessState";
+import { formatRetryMessage } from "@/lib/auth/verification";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { Mail, RefreshCw, ArrowLeft } from "lucide-react";
-
-function formatRetryMessage(seconds: number) {
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  if (minutes <= 0) return `${remainingSeconds}s`;
-  if (remainingSeconds <= 0) return `${minutes}m`;
-  return `${minutes}m ${remainingSeconds}s`;
-}
 
 export default function ResendVerificationPage() {
   const router = useRouter();
   const hasRequestedRef = useRef(false);
   const [targetEmail, setTargetEmail] = useState("");
+  const [isVerifiedLocally, setIsVerifiedLocally] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const handleResend = useCallback(async (email: string) => {
+    if (!email.trim()) {
+      setError("We could not find your email. Please go back to login.");
+      return;
+    }
+
+    try {
+      setIsResending(true);
+      setMessage(null);
+      setError(null);
+
+      const response = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim().toLowerCase() }),
+      });
+
+      const json = (await response.json()) as
+        | {
+            success?: boolean;
+            alreadyVerified?: boolean;
+            error?: string;
+            retryAfterSeconds?: number;
+          }
+        | undefined;
+
+      if (!response.ok) {
+        if (response.status === 429 && typeof json?.retryAfterSeconds === "number") {
+          throw new Error(
+            `Please wait ${formatRetryMessage(json.retryAfterSeconds)} before trying again.`
+          );
+        }
+        throw new Error(json?.error ?? "Failed to resend verification email.");
+      }
+
+      if (json?.alreadyVerified) {
+        setIsVerifiedLocally(true);
+        setTimeout(() => router.replace("/"), 1000);
+        return;
+      }
+
+      setMessage(`Verification email sent to ${email}. Please check your email.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to resend verification email.");
+    } finally {
+      setIsResending(false);
+    }
+  }, [router]);
 
   useEffect(() => {
     const resolveEmailAndSend = async () => {
@@ -50,45 +94,15 @@ export default function ResendVerificationPage() {
     };
 
     void resolveEmailAndSend();
-  }, []);
+  }, [handleResend]);
 
-  const handleResend = async (email: string) => {
-    if (!email.trim()) {
-      setError("We could not find your email. Please go back to login.");
-      return;
-    }
-
-    try {
-      setIsResending(true);
-      setMessage(null);
-      setError(null);
-
-      const response = await fetch("/api/auth/resend-verification", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim().toLowerCase() }),
-      });
-
-      const json = (await response.json()) as
-        | { success?: boolean; error?: string; retryAfterSeconds?: number }
-        | undefined;
-
-      if (!response.ok) {
-        if (response.status === 429 && typeof json?.retryAfterSeconds === "number") {
-          throw new Error(
-            `Please wait ${formatRetryMessage(json.retryAfterSeconds)} before trying again.`
-          );
-        }
-        throw new Error(json?.error ?? "Failed to resend verification email.");
-      }
-
-      setMessage(`Verification email sent to ${email}. Please check your email.`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to resend verification email.");
-    } finally {
-      setIsResending(false);
-    }
-  };
+  if (isVerifiedLocally) {
+    return (
+      <AuthShell>
+        <VerificationSuccessState />
+      </AuthShell>
+    );
+  }
 
   return (
     <AuthShell>

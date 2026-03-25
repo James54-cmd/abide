@@ -3,9 +3,11 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AuthShell from "@/components/auth/AuthShell";
+import VerificationSuccessState from "@/components/auth/VerificationSuccessState";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { loginWithGraphql } from "@/lib/graphql/auth";
-import { Mail, RefreshCw, LogOut, CheckCircle2 } from "lucide-react";
+import { formatRetryMessage } from "@/lib/auth/verification";
+import { Mail, RefreshCw, LogOut } from "lucide-react";
 
 export default function VerifyPage() {
   const router = useRouter();
@@ -175,12 +177,7 @@ export default function VerifyPage() {
         | undefined;
       if (!response.ok) {
         if (response.status === 429 && typeof json?.retryAfterSeconds === "number") {
-          const retryAfterMinutes = Math.ceil(json.retryAfterSeconds / 60);
-          throw new Error(
-            `Please wait ${retryAfterMinutes} minute${
-              retryAfterMinutes === 1 ? "" : "s"
-            } before requesting another email.`
-          );
+          throw new Error(`Please wait ${formatRetryMessage(json.retryAfterSeconds)} before trying again.`);
         }
         throw new Error(json?.error ?? "Failed to resend verification email.");
       }
@@ -202,17 +199,7 @@ export default function VerifyPage() {
   if (isVerifiedLocally) {
     return (
       <AuthShell>
-        <div className="w-full space-y-6 text-center animate-in fade-in zoom-in duration-500">
-           <div className="w-20 h-20 rounded-full bg-green-500/10 flex items-center justify-center mx-auto mb-2">
-            <CheckCircle2 className="w-10 h-10 text-green-500" />
-          </div>
-          <h2 className="text-2xl font-serif font-semibold text-ink dark:text-parchment">
-            Account Verified!
-          </h2>
-          <p className="text-sm text-muted">
-            Redirecting you to the app...
-          </p>
-        </div>
+        <VerificationSuccessState />
       </AuthShell>
     );
   }

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import AuthShell from "@/components/auth/AuthShell";
 import { loginWithGraphql, signUpWithGraphql } from "@/lib/graphql/auth";
 import { getSafeAuthRedirectUrl } from "@/lib/auth/redirect";
+import { formatRetryMessage } from "@/lib/auth/verification";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 
 function getAuthRedirectUrl() {
@@ -173,12 +174,7 @@ export default function LoginPage() {
         | undefined;
       if (!response.ok) {
         if (response.status === 429 && typeof json?.retryAfterSeconds === "number") {
-          const retryAfterMinutes = Math.ceil(json.retryAfterSeconds / 60);
-          throw new Error(
-            `Please wait ${retryAfterMinutes} minute${
-              retryAfterMinutes === 1 ? "" : "s"
-            } before requesting another email.`
-          );
+          throw new Error(`Please wait ${formatRetryMessage(json.retryAfterSeconds)} before trying again.`);
         }
         throw new Error(json?.error ?? "Failed to resend verification email.");
       }
