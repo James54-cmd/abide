@@ -63,7 +63,7 @@ export default function BottomNav() {
   };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-parchment/95 dark:bg-dark-bg/95 backdrop-blur-md border-t border-gold/10">
+    <nav className="fixed bottom-0 left-0 right-0 mx-auto max-w-[430px] z-50 bg-parchment/95 dark:bg-dark-bg/95 backdrop-blur-md border-t border-gold/10">
       {isBiblePage ? (
         <div className="mx-auto max-w-[430px] border-b border-gold/10 px-4 py-2.5 flex items-center justify-between gap-3">
           <Button onClick={handlePrev} variant="ghost" size="icon" className="rounded-full h-9 w-9" disabled={!bibleBottom.canPrev}>
