@@ -39,25 +39,6 @@ export default function TopBar() {
     conversations: [],
     activeConversationId: null,
   });
-  const [isVerified, setIsVerified] = useState<boolean>(false);
-
-  useEffect(() => {
-    const checkVerification = async () => {
-      const supabase = getSupabaseBrowserClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data: profile } = await (supabase
-        .from("profiles")
-        .select("verification_status")
-        .eq("id", user.id)
-        .single() as any);
-      
-      setIsVerified(profile?.verification_status === "verified");
-    };
-
-    checkVerification();
-  }, []);
 
   useEffect(() => {
     const handleBibleHeader = (event: Event) => {

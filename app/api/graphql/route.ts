@@ -601,7 +601,7 @@ const resolvers = {
 
         // Send custom link
         const verificationLink = `${process.env.NEXT_PUBLIC_SITE_URL}/auth/verify-token?token=${verificationToken}`;
-        await sendVerificationEmail(email, verificationLink);
+        await sendVerificationEmail(email, verificationLink, fullName);
       } catch (err) {
         console.error("Failed to send verification email:", err);
       }
@@ -909,7 +909,8 @@ const resolvers = {
         .eq("id", targetUser.id);
 
       const verificationLink = `${process.env.NEXT_PUBLIC_SITE_URL}/auth/verify-token?token=${verificationToken}`;
-      await sendVerificationEmail(email, verificationLink);
+      const fullName = (targetUser.user_metadata?.full_name as string) || (targetUser.user_metadata?.fullName as string);
+      await sendVerificationEmail(email, verificationLink, fullName);
 
       return true;
     },
