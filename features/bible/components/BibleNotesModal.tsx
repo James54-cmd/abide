@@ -9,9 +9,11 @@ interface BibleNotesModalProps {
   notes: BibleNote[];
   activeVerseForNote: string | null;
   noteDraft: string;
+  isEditing?: boolean;
   onNoteDraftChange: (value: string) => void;
   onSaveNote: () => void;
   onCancelNote: () => void;
+  onEditNote: (note: BibleNote) => void;
   onDeleteNote: (noteId: string) => void;
   onClose: () => void;
 }
@@ -20,12 +22,20 @@ export default function BibleNotesModal({
   notes,
   activeVerseForNote,
   noteDraft,
+  isEditing,
   onNoteDraftChange,
   onSaveNote,
   onCancelNote,
+  onEditNote,
   onDeleteNote,
   onClose,
 }: BibleNotesModalProps) {
+  // Parse verse number from reference string (e.g. "GEN 1:1" -> 1)
+  const activeVerseNum = activeVerseForNote ? parseInt(activeVerseForNote.split(':').pop() || "") : null;
+  
+  const filteredNotes = activeVerseForNote && !isNaN(activeVerseNum as number)
+    ? notes.filter(n => n.verse_start === activeVerseNum)
+    : notes;
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -44,7 +54,7 @@ export default function BibleNotesModal({
       >
           <div className="flex items-center justify-between px-4 pt-4 pb-2">
             <h3 className="font-serif text-lg font-semibold text-ink dark:text-parchment">
-              {activeVerseForNote ? "Add Note" : `Notes (${notes.length})`}
+              {isEditing ? "Edit Note" : activeVerseForNote ? "Add Note" : `Notes (${notes.length})`}
             </h3>
             <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gold/10 text-muted">
               <X className="w-4 h-4" />
@@ -63,9 +73,41 @@ export default function BibleNotesModal({
                   className="w-full min-h-28 rounded-xl border border-gold/10 bg-parchment/30 dark:bg-dark-bg/30 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gold/30 resize-none text-ink dark:text-parchment placeholder:text-muted/60"
                 />
                 <div className="flex gap-2">
-                  <Button size="sm" onClick={onSaveNote} disabled={!noteDraft.trim()} className="flex-1 bg-gold hover:bg-gold/90 text-white border-0">Save</Button>
-                  <Button size="sm" variant="outline" onClick={onCancelNote} className="flex-1 border-gold/20 text-muted">Cancel</Button>
+                  <Button size="sm" onClick={onSaveNote} disabled={!noteDraft.trim()} className="flex-1 bg-gold hover:bg-gold/90 text-white border-0 font-bold">Save Note</Button>
+                  <Button size="sm" variant="outline" onClick={onCancelNote} className="flex-1 border-gold/20 text-muted font-medium">Cancel</Button>
                 </div>
+
+                {filteredNotes.length > 0 && (
+                  <div className="pt-4 border-t border-gold/10">
+                    <p className="text-[10px] font-bold text-muted/60 uppercase tracking-widest mb-3">Previous Notes</p>
+                    <div className="space-y-2">
+                      {filteredNotes.map((note) => (
+                        <div key={note.id} className="rounded-xl bg-gold/5 dark:bg-gold/5 p-3 border border-gold/10 group">
+                           <p className="text-sm text-ink dark:text-parchment leading-relaxed">{note.content}</p>
+                           <div className="mt-2 flex items-center justify-between">
+                             <p className="text-[10px] text-muted font-medium">
+                               {new Date(note.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                             </p>
+                             <div className="flex gap-1">
+                               <button 
+                                 onClick={() => onEditNote(note)}
+                                 className="text-[10px] font-bold text-gold hover:underline px-2 py-1"
+                               >
+                                 Edit
+                               </button>
+                               <button 
+                                 onClick={() => onDeleteNote(note.id)}
+                                 className="text-[10px] font-bold text-red-500/60 hover:text-red-500 px-2 py-1"
+                               >
+                                 Delete
+                               </button>
+                             </div>
+                           </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : notes.length === 0 ? (
               <div className="py-12 flex flex-col items-center justify-center text-center opacity-40">
@@ -88,12 +130,22 @@ export default function BibleNotesModal({
                           {new Date(note.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                         </p>
                       </div>
-                      <button
-                        onClick={() => onDeleteNote(note.id)}
-                        className="p-1 px-1.5 rounded-lg hover:bg-red-50 hover:text-red-500 text-muted/40 transition-all active:scale-90"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => onEditNote(note)}
+                          className="p-1.5 rounded-lg hover:bg-gold/10 text-gold transition-all active:scale-90"
+                          title="Edit"
+                        >
+                           <span className="text-[10px] font-bold px-1">Edit</span>
+                        </button>
+                        <button
+                          onClick={() => onDeleteNote(note.id)}
+                          className="p-1 px-1.5 rounded-lg hover:bg-red-50 hover:text-red-500 text-muted/40 transition-all active:scale-90"
+                          title="Delete"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}

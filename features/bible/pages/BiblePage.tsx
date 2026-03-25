@@ -86,6 +86,7 @@ export default function BiblePage() {
                             prev.includes(ref) ? prev.filter(id => id !== ref) : [...prev, ref]
                           );
                         }}
+                        onOpenNotes={(ref, verseNum) => state.handleOpenNote(ref, verseNum)}
                       />
                     );
                   })}
@@ -147,12 +148,15 @@ export default function BiblePage() {
             notes={state.notes}
             activeVerseForNote={state.activeVerseForNote}
             noteDraft={state.noteDraft}
+            isEditing={!!state.editingNoteId}
             onNoteDraftChange={state.setNoteDraft}
             onSaveNote={state.handleSaveNote}
             onCancelNote={() => {
               state.setActiveVerseForNote(null);
               state.setNoteDraft("");
+              state.setEditingNoteId(null);
             }}
+            onEditNote={state.handleEditNote}
             onDeleteNote={state.handleDeleteNote}
             onClose={() => state.setIsNotesOpen(false)}
           />

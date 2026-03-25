@@ -13,6 +13,7 @@ interface BibleVerseItemProps {
   verseTextClasses: string;
   index: number;
   onToggleActive: (reference: string) => void;
+  onOpenNotes: (reference: string, verseNum: number) => void;
 }
 
 export default function BibleVerseItem({
@@ -23,6 +24,7 @@ export default function BibleVerseItem({
   verseTextClasses,
   index,
   onToggleActive,
+  onOpenNotes,
 }: BibleVerseItemProps) {
   return (
     <motion.div
@@ -46,7 +48,13 @@ export default function BibleVerseItem({
           <sup className="text-gold font-bold text-[0.65em] mr-1 select-none inline-flex items-center gap-1 leading-none">
             {verse.verse}
             {noteCount && noteCount > 0 ? (
-              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-gold/15 text-gold-700 dark:text-gold-400 font-bold border border-gold/10 transform -translate-y-[1px]">
+              <span 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenNotes(verse.reference, verse.verse);
+                }}
+                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-gold/15 text-gold-700 dark:text-gold-400 font-bold border border-gold/10 transform -translate-y-[1px] hover:bg-gold/30 transition-colors pointer-events-auto cursor-help"
+              >
                 <MessageSquare className="w-2.5 h-2.5" />
                 <span className="text-[0.85em]">{noteCount}</span>
               </span>

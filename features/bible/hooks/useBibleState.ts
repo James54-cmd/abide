@@ -386,8 +386,10 @@ export function useBibleState() {
     if (saved) {
       if (!editingNoteId) {
         setNotes(prev => [saved, ...prev]);
+        toast.success("Note saved");
       } else {
         setNotes(prev => prev.map(n => n.id === saved.id ? saved : n));
+        toast.success("Note updated");
       }
     }
 
@@ -402,7 +404,12 @@ export function useBibleState() {
     if (!token) return;
 
     setNotes((prev) => prev.filter((n) => n.id !== noteId));
-    await deleteBibleNote(token, noteId);
+    try {
+      await deleteBibleNote(token, noteId);
+      toast.success("Note deleted");
+    } catch {
+      toast.error("Delete failed");
+    }
   };
 
   const handleBulkHighlight = async (color: string) => {
@@ -584,6 +591,7 @@ export function useBibleState() {
     selectedVerseIds,
     noteDraft,
     activeVerseNumForNote,
+    editingNoteId,
     isBootstrapped,
 
     // Setters
