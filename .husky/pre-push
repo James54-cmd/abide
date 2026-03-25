@@ -1,0 +1,8 @@
+#!/usr/bin/env sh
+echo "🔍 Running lint..."
+npm run lint -- --max-warnings=0 || {
+  echo "❌ Lint failed (errors or warnings). Fix issues before pushing.";
+  exit 1;
+}
+
+echo "✅ All checks passed. Push allowed."
