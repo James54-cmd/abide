@@ -8,6 +8,7 @@ import BibleSettingsSheet from "@/features/bible/components/BibleSettingsSheet";
 import BibleNotesModal from "@/features/bible/components/BibleNotesModal";
 import BibleActionBar from "@/features/bible/components/BibleActionBar";
 import { useBibleState } from "@/features/bible/hooks/useBibleState";
+import { getActiveHighlightColor, getFormattedSelectionCitation } from "@/features/bible/utils";
 
 export default function BiblePage() {
   const state = useBibleState();
@@ -19,46 +20,19 @@ export default function BiblePage() {
     state.handleOpenNote(firstRef, verseNum);
   };
 
-  const activeHighlightColor = (() => {
-    if (state.selectedVerseIds.length === 0) return null;
-    const nums = state.selectedVerseIds.map(ref => state.verses.find(v => v.reference === ref)?.verse).filter(Boolean) as number[];
-    let firstColor: string | null = null;
-    for (const num of nums) {
-      const h = state.highlights.find(h => h.verse_start === num);
-      if (!h) return null;
-      if (!firstColor) firstColor = h.color;
-      else if (firstColor !== h.color) return null;
-    }
-    return firstColor;
-  })();
+  const activeHighlightColor = getActiveHighlightColor(
+    state.selectedVerseIds,
+    state.verses,
+    state.highlights
+  );
 
-  const selectedCitation = (() => {
-    if (state.selectedVerseIds.length === 0) return "";
-    const nums = state.selectedVerseIds
-      .map(ref => state.verses.find(v => v.reference === ref)?.verse)
-      .filter((v): v is number => v !== undefined);
-    
-    if (nums.length === 0) return "";
-    
-    nums.sort((a, b) => a - b);
-    let result = [];
-    let start = nums[0];
-    let end = nums[0];
-
-    for (let i = 1; i < nums.length; i++) {
-      if (nums[i] === end + 1) {
-        end = nums[i];
-      } else {
-        result.push(start === end ? `${start}` : `${start}-${end}`);
-        start = nums[i];
-        end = nums[i];
-      }
-    }
-    result.push(start === end ? `${start}` : `${start}-${end}`);
-    
-    const chapterLabel = `${state.selectedBook?.name ?? "Bible"} ${state.selectedChapter?.number ?? ""}`;
-    return `${chapterLabel}:${result.join(", ")} ${state.translation}`;
-  })();
+  const selectedCitation = getFormattedSelectionCitation(
+    state.selectedVerseIds,
+    state.verses,
+    state.selectedBook?.name ?? "Bible",
+    state.selectedChapter?.number ?? "",
+    state.translation
+  );
 
   return (
     <PageTransition>
