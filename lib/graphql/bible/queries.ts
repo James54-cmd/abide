@@ -15,6 +15,7 @@ export const BIBLE_BOOTSTRAP_QUERY = gql`
       books {
         id
         name
+        testament
       }
       selectedBookId
       chapters {

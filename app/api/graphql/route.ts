@@ -104,6 +104,7 @@ const typeDefs = `
   type BibleBook {
     id: String!
     name: String!
+    testament: String!
   }
 
   type BibleChapter {

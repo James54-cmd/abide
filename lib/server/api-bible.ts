@@ -63,16 +63,23 @@ export async function apiBibleGetCached(
   return value;
 }
 
-export type BibleBookRow = { id: string; name: string };
+const NEW_TESTAMENT_BOOKS = new Set([
+  "MAT", "MRK", "LUK", "JHN", "ACT", "ROM", "1CO", "2CO", "GAL", "EPH", "PHP", "COL", "1TH", "2TH", "1TI", "2TI", "TIT", "PHM", "HEB", "JAS", "1PE", "2PE", "1JO", "2JO", "3JO", "JUD", "REV"
+]);
+
+export type BibleBookRow = { id: string; name: string; testament: "OT" | "NT" };
 export type BibleChapterRow = { id: string; number: number };
 export type BibleVerseRow = { reference: string; text: string; verse: number };
 
 export function mapBibleBooksData(booksData: unknown): BibleBookRow[] {
   return toItemArray(booksData)
-    .map((item) => ({
-      id: String(item.id ?? ""),
-      name: String(item.name ?? ""),
-    }))
+    .map((item) => {
+      const id = String(item.id ?? "");
+      // Prefer nameLong for completeness, fallback to name
+      const name = String(item.nameLong || item.name || "");
+      const testament: "OT" | "NT" = NEW_TESTAMENT_BOOKS.has(id.toUpperCase()) ? "NT" : "OT";
+      return { id, name, testament };
+    })
     .filter((item) => item.id && item.name);
 }
 

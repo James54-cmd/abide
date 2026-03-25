@@ -3,7 +3,7 @@ export type FontSize = "small" | "medium" | "large" | "xlarge";
 export type FontFamily = "serif" | "sans";
 export type LineSpacing = "tight" | "normal" | "relaxed" | "loose";
 
-export type BibleBook = { id: string; name: string };
+export type BibleBook = { id: string; name: string; testament?: "OT" | "NT" };
 export type BibleChapter = { id: string; number: number };
 export type BibleVerse = { reference: string; text: string; verse: number };
 export type BibleHighlight = {
