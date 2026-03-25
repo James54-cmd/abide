@@ -34,11 +34,12 @@ export default function BibleActionBar({
   onClear,
 }: BibleActionBarProps) {
   return (
-    <div className="fixed bottom-32 left-0 right-0 z-50 flex justify-center pointer-events-none px-4">
+    <div className="fixed bottom-40 left-0 right-0 z-50 flex justify-center pointer-events-none px-4">
       <motion.div
-        initial={{ y: 100, opacity: 0 }}
+        initial={{ y: 160, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        exit={{ y: 100, opacity: 0 }}
+        exit={{ y: 160, opacity: 0 }}
+        transition={{ type: "spring", stiffness: 520, damping: 30 }}
         className="w-full max-w-[400px] pointer-events-auto flex flex-col items-center gap-3"
       >
         <motion.div 

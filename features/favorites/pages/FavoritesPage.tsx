@@ -1,14 +1,19 @@
 "use client";
 
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Heart, Trash2 } from "lucide-react";
 import Link from "next/link";
 import PageTransition from "@/components/PageTransition";
 import EmptyState from "@/components/ui/EmptyState";
 import { useFavoritesState } from "@/features/favorites/hooks/useFavoritesState";
+import ConfirmActionModal from "@/components/ui/ConfirmActionModal";
 
 export default function FavoritesPage() {
   const { favorites, handleRemove, isLoading } = useFavoritesState();
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [pendingFavoriteId, setPendingFavoriteId] = useState<string | null>(null);
+  const [isConfirming, setIsConfirming] = useState(false);
 
   const formatFavoriteReference = (fav: (typeof favorites)[number]) => {
     if (!fav.book_name) return fav.verse_reference;
@@ -77,11 +82,17 @@ export default function FavoritesPage() {
                   </Link>
 
                   <button
-                    onClick={() => handleRemove(fav.id)}
+                    onClick={() => {
+                      setPendingFavoriteId(fav.id);
+                      setIsConfirmOpen(true);
+                    }}
                     className="absolute top-4 right-4 p-1.5 rounded-full text-muted/40 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all active:scale-95"
                     aria-label="Remove from favorites"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2
+                      className="w-4 h-4"
+                      strokeWidth={1.6}
+                    />
                   </button>
                 </motion.div>
               ))}
@@ -89,6 +100,31 @@ export default function FavoritesPage() {
           </div>
         )}
       </div>
+
+      <ConfirmActionModal
+        isOpen={isConfirmOpen}
+        title="Remove Saved Verse?"
+        description="This will remove the verse from your saved favorites."
+        confirmText="Remove"
+        cancelText="Cancel"
+        danger
+        isConfirming={isConfirming}
+        onCancel={() => {
+          setIsConfirmOpen(false);
+          setPendingFavoriteId(null);
+        }}
+        onConfirm={async () => {
+          if (!pendingFavoriteId) return;
+          try {
+            setIsConfirming(true);
+            await handleRemove(pendingFavoriteId);
+          } finally {
+            setIsConfirming(false);
+            setIsConfirmOpen(false);
+            setPendingFavoriteId(null);
+          }
+        }}
+      />
     </PageTransition>
   );
 }

@@ -1136,9 +1136,14 @@ const resolvers = {
       context: GraphQlContext
     ) => {
       const { user, supabase } = await requireUserFromAuthHeader(context.authHeader);
+      const rawTranslation = (args.input.translation?.toUpperCase?.() as string | undefined) ?? DEFAULT_TRANSLATION;
+      const requestedTranslation =
+        rawTranslation === "NIV" || rawTranslation === "NLT"
+          ? (rawTranslation as Translation)
+          : DEFAULT_TRANSLATION;
       const payload = {
         user_id: user.id,
-        translation: args.input.translation.toUpperCase(),
+        translation: requestedTranslation,
         book_id: args.input.bookId,
         chapter_id: args.input.chapterId,
         verse_start: args.input.verseStart,
@@ -1152,10 +1157,19 @@ const resolvers = {
         .select("*")
         .single();
       if (error) throw error;
+
+      // Resolve full book name so the client can display "Philippians" instead of "PHP".
+      const booksData = await apiBibleGetCached(`/v1/bibles/${getBibleIdForTranslation(requestedTranslation)}/books`);
+      const books = mapBibleBooksData(booksData);
+      const bookIdUpper = String(data.book_id).toUpperCase();
+      const bookName =
+        books.find((b) => String(b.id).toUpperCase() === bookIdUpper)?.name ?? String(data.book_id);
+
       return {
         id: data.id,
         translation: data.translation,
         bookId: data.book_id,
+        bookName,
         chapterId: data.chapter_id,
         verseStart: data.verse_start,
         verseEnd: data.verse_end,
@@ -1177,9 +1191,29 @@ const resolvers = {
     },
     bulkSaveBibleFavorites: async (_: unknown, args: { inputs: any[] }, context: GraphQlContext) => {
       const { user, supabase } = await requireUserFromAuthHeader(context.authHeader);
+      const translations = Array.from(
+        new Set(
+          (args.inputs ?? [])
+            .map((i) => (i?.translation ? String(i.translation).toUpperCase() : null))
+            .filter((t): t is Translation => t === "NIV" || t === "NLT")
+        )
+      );
+
+      const booksByTranslation = new Map<Translation, Map<string, string>>();
+      await Promise.all(
+        translations.map(async (t) => {
+          const bibleId = getBibleIdForTranslation(t);
+          const booksData = await apiBibleGetCached(`/v1/bibles/${bibleId}/books`);
+          const books = mapBibleBooksData(booksData);
+          const map = new Map<string, string>();
+          for (const b of books) map.set(String(b.id).toUpperCase(), b.name);
+          booksByTranslation.set(t, map);
+        })
+      );
+
       const inserts = args.inputs.map(input => ({
         user_id: user.id,
-        translation: input.translation.toUpperCase(),
+        translation: String(input.translation).toUpperCase(),
         book_id: input.bookId,
         chapter_id: input.chapterId,
         verse_start: input.verseStart,
@@ -1196,6 +1230,10 @@ const resolvers = {
         id: item.id,
         translation: item.translation,
         bookId: item.book_id,
+        bookName:
+          booksByTranslation.get((item.translation as Translation) ?? DEFAULT_TRANSLATION)?.get(
+            String(item.book_id).toUpperCase()
+          ) ?? String(item.book_id),
         chapterId: item.chapter_id,
         verseStart: item.verse_start,
         verseEnd: item.verse_end,

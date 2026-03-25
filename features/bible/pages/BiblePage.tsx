@@ -59,7 +59,7 @@ export default function BiblePage() {
     <PageTransition>
       <div className="bg-parchment dark:bg-dark-bg min-h-screen pb-20">
         <main>
-          <div className="px-5 py-6">
+          <div className="px-5 py-6 pb-20">
             {state.error ? (
               <p className="text-xs text-red-600 text-center">{state.error}</p>
             ) : state.isLoading ? (
