@@ -246,6 +246,8 @@ const typeDefs = `
     saveBibleProgress(input: SaveBibleProgressInput!): BibleProgress!
     saveBibleHighlight(input: SaveBibleHighlightInput!): BibleHighlight!
     deleteBibleHighlight(id: String!): Boolean!
+    bulkSaveBibleHighlights(inputs: [SaveBibleHighlightInput!]!): [BibleHighlight!]!
+    bulkDeleteBibleHighlights(ids: [String!]!): Boolean!
     saveBibleNote(input: SaveBibleNoteInput!): BibleNote!
     deleteBibleNote(id: String!): Boolean!
     deleteChatConversation(id: String!): Boolean!
@@ -801,6 +803,74 @@ const resolvers = {
         .eq("user_id", user.id);
       if (error) throw error;
       return true;
+    },
+    bulkDeleteBibleHighlights: async (_: unknown, args: { ids: string[] }, context: GraphQlContext) => {
+      const { user, supabase } = await requireUserFromAuthHeader(context.authHeader);
+      const ids = args.ids?.filter(Boolean) || [];
+      if (ids.length === 0) return true;
+      const { error } = await supabase
+        .from("bible_highlights")
+        .delete()
+        .in("id", ids)
+        .eq("user_id", user.id);
+      if (error) throw error;
+      return true;
+    },
+    bulkSaveBibleHighlights: async (
+      _: unknown,
+      args: {
+        inputs: {
+          translation: string;
+          bookId: string;
+          chapterId: string;
+          verseStart: number;
+          verseEnd: number;
+          color?: string | null;
+        }[];
+      },
+      context: GraphQlContext
+    ) => {
+      const { user, supabase } = await requireUserFromAuthHeader(context.authHeader);
+      if (!args.inputs.length) return [];
+
+      const inserts = args.inputs.map(input => {
+        const translation = input.translation.toUpperCase();
+        if (!["NIV", "NLT"].includes(translation)) throw new Error("Invalid translation.");
+        const bookId = input.bookId?.trim();
+        const chapterId = input.chapterId?.trim();
+        if (!bookId || !chapterId) throw new Error("bookId and chapterId are required.");
+        const start = Math.max(1, Math.floor(input.verseStart));
+        const end = Math.max(start, Math.floor(input.verseEnd));
+        const color = input.color?.trim() || "gold";
+
+        return {
+          user_id: user.id,
+          translation,
+          book_id: bookId,
+          chapter_id: chapterId,
+          verse_start: start,
+          verse_end: end,
+          color,
+        };
+      });
+
+      const { data, error } = await supabase
+        .from("bible_highlights")
+        .insert(inserts)
+        .select("id,translation,book_id,chapter_id,verse_start,verse_end,color,created_at,updated_at");
+
+      if (error) throw error;
+      return data.map(item => ({
+        id: item.id,
+        translation: item.translation,
+        bookId: item.book_id,
+        chapterId: item.chapter_id,
+        verseStart: item.verse_start,
+        verseEnd: item.verse_end,
+        color: item.color ?? "gold",
+        createdAt: item.created_at,
+        updatedAt: item.updated_at,
+      }));
     },
     saveBibleNote: async (
       _: unknown,

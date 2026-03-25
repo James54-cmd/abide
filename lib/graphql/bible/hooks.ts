@@ -5,7 +5,9 @@ import {
   SAVE_BIBLE_NOTE_MUTATION,
   DELETE_BIBLE_NOTE_MUTATION,
   SAVE_BIBLE_HIGHLIGHT_MUTATION,
-  DELETE_BIBLE_HIGHLIGHT_MUTATION
+  DELETE_BIBLE_HIGHLIGHT_MUTATION,
+  BULK_SAVE_BIBLE_HIGHLIGHTS_MUTATION,
+  BULK_DELETE_BIBLE_HIGHLIGHTS_MUTATION
 } from "./mutations";
 import {
   BibleBook,
@@ -156,6 +158,50 @@ export async function deleteBibleHighlight(
   await client.mutate({
     mutation: DELETE_BIBLE_HIGHLIGHT_MUTATION,
     variables: { id },
+    context: { headers: { Authorization: `Bearer ${token}` } },
+  });
+}
+
+export async function bulkSaveBibleHighlights(
+  token: string,
+  inputs: {
+    translation: string;
+    bookId: string;
+    chapterId: string;
+    verseStart: number;
+    verseEnd: number;
+    color: string;
+  }[]
+) {
+  const client = getApolloClient();
+  const { data } = await client.mutate<{ bulkSaveBibleHighlights: any[] }>({
+    mutation: BULK_SAVE_BIBLE_HIGHLIGHTS_MUTATION,
+    variables: { inputs },
+    context: { headers: { Authorization: `Bearer ${token}` } },
+  });
+  const raw = data?.bulkSaveBibleHighlights;
+  if (!raw) return [];
+  return raw.map(item => ({
+    id: item.id,
+    translation: item.translation as Translation,
+    book_id: item.bookId,
+    chapter_id: item.chapterId,
+    verse_start: item.verseStart,
+    verse_end: item.verseEnd,
+    color: item.color,
+    created_at: item.createdAt,
+    updated_at: item.updatedAt,
+  } as BibleHighlight));
+}
+
+export async function bulkDeleteBibleHighlights(
+  token: string,
+  ids: string[]
+) {
+  const client = getApolloClient();
+  await client.mutate({
+    mutation: BULK_DELETE_BIBLE_HIGHLIGHTS_MUTATION,
+    variables: { ids },
     context: { headers: { Authorization: `Bearer ${token}` } },
   });
 }

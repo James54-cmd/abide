@@ -57,3 +57,25 @@ export const DELETE_BIBLE_HIGHLIGHT_MUTATION = gql`
     deleteBibleHighlight(id: $id)
   }
 `;
+
+export const BULK_SAVE_BIBLE_HIGHLIGHTS_MUTATION = gql`
+  mutation BulkSaveBibleHighlights($inputs: [SaveBibleHighlightInput!]!) {
+    bulkSaveBibleHighlights(inputs: $inputs) {
+      id
+      translation
+      bookId
+      chapterId
+      verseStart
+      verseEnd
+      color
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+export const BULK_DELETE_BIBLE_HIGHLIGHTS_MUTATION = gql`
+  mutation BulkDeleteBibleHighlights($ids: [String!]!) {
+    bulkDeleteBibleHighlights(ids: $ids)
+  }
+`;

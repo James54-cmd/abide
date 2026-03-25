@@ -9,6 +9,8 @@ import {
   deleteBibleNote,
   saveBibleHighlight,
   deleteBibleHighlight,
+  bulkSaveBibleHighlights,
+  bulkDeleteBibleHighlights,
 } from "@/lib/graphql/bible/hooks";
 import { toast } from "sonner";
 import type {
@@ -432,29 +434,27 @@ export function useBibleState() {
       const idsToRemove = highlightsToRemove.map(h => h.id);
       
       setHighlights(prev => prev.filter(h => !idsToRemove.includes(h.id)));
-      for (const id of idsToRemove) {
-        await deleteBibleHighlight(token, id);
-      }
+      await bulkDeleteBibleHighlights(token, idsToRemove);
       toast.success("Highlights removed");
     } else {
       // Clear existing for these verses first
       const itemsToClear = highlights.filter(h => selectedNums.includes(h.verse_start));
-      for (const h of itemsToClear) {
-        await deleteBibleHighlight(token, h.id);
+      const idsToClear = itemsToClear.map(h => h.id);
+      
+      if (idsToClear.length > 0) {
+        await bulkDeleteBibleHighlights(token, idsToClear);
       }
 
-      const newHighlights: BibleHighlight[] = [];
-      for (const v of selectedVersesData) {
-        const saved = await saveBibleHighlight(token, {
-          translation,
-          bookId,
-          chapterId: chapterId,
-          verseStart: v.verse,
-          verseEnd: v.verse,
-          color
-        });
-        if (saved) newHighlights.push(saved);
-      }
+      const inputs = selectedVersesData.map(v => ({
+        translation,
+        bookId,
+        chapterId,
+        verseStart: v.verse,
+        verseEnd: v.verse,
+        color
+      }));
+
+      const newHighlights = await bulkSaveBibleHighlights(token, inputs);
 
       setHighlights(prev => {
         const others = prev.filter(h => !selectedNums.includes(h.verse_start));
