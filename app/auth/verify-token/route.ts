@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
   // 1. Find profile by token
   const { data: profile, error: profileError } = await adminClient
     .from("profiles")
-    .select("id, email")
+    .select("id, email, verification_token_expires_at")
     .eq("verification_token", token)
     .single();
 
@@ -29,12 +29,29 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL("/login?error=Invalid or expired verification link", request.url));
   }
 
+  const expiresAt = profile.verification_token_expires_at
+    ? new Date(profile.verification_token_expires_at).getTime()
+    : null;
+  if (expiresAt && Number.isFinite(expiresAt) && expiresAt < Date.now()) {
+    await adminClient
+      .from("profiles")
+      .update({
+        verification_status: "expired",
+        verification_token: null,
+      })
+      .eq("id", profile.id);
+    return NextResponse.redirect(
+      new URL(`/resend_verification?email=${encodeURIComponent(profile.email)}`, request.url)
+    );
+  }
+
   // 2. Mark as verified in profiles
   const { error: updateError } = await adminClient
     .from("profiles")
     .update({ 
       verification_status: "verified",
-      verification_token: null 
+      verification_token: null,
+      verification_token_expires_at: null,
     })
     .eq("id", profile.id);
 

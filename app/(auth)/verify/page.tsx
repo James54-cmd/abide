@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AuthShell from "@/components/auth/AuthShell";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
-import { resendVerificationWithGraphql, loginWithGraphql } from "@/lib/graphql/auth";
+import { loginWithGraphql } from "@/lib/graphql/auth";
 import { Mail, RefreshCw, LogOut, CheckCircle2 } from "lucide-react";
 
 export default function VerifyPage() {
@@ -14,7 +14,9 @@ export default function VerifyPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isVerifiedLocally, setIsVerifiedLocally] = useState(false);
-  const [verificationStatus, setVerificationStatus] = useState<"verified" | "pending" | null>(null);
+  const [verificationStatus, setVerificationStatus] = useState<
+    "verified" | "pending" | "expired" | null
+  >(null);
 
   useEffect(() => {
     let pollInterval: NodeJS.Timeout;
@@ -84,6 +86,9 @@ export default function VerifyPage() {
                   setTimeout(() => router.replace("/"), 1000);
                 } else if (status === "pending") {
                   setVerificationStatus("pending");
+                } else if (status === "expired") {
+                  setVerificationStatus("expired");
+                  router.replace(`/resend_verification?email=${encodeURIComponent(user.email ?? "")}`);
                 }
               }
             }
@@ -134,6 +139,10 @@ export default function VerifyPage() {
             setTimeout(() => router.replace("/"), 1000);
           } else if (status === "pending") {
             setVerificationStatus("pending");
+          } else if (status === "expired") {
+            setVerificationStatus("expired");
+            clearInterval(pollInterval);
+            router.replace(`/resend_verification?email=${encodeURIComponent(currentEmail)}`);
           }
         } catch (err) {
           // Ignore poll errors
@@ -156,9 +165,25 @@ export default function VerifyPage() {
       setMessage(null);
       setError(null);
       
-      const success = await resendVerificationWithGraphql(email);
-
-      if (!success) throw new Error("Failed to resend verification email.");
+      const response = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const json = (await response.json()) as
+        | { success?: boolean; error?: string; retryAfterSeconds?: number }
+        | undefined;
+      if (!response.ok) {
+        if (response.status === 429 && typeof json?.retryAfterSeconds === "number") {
+          const retryAfterMinutes = Math.ceil(json.retryAfterSeconds / 60);
+          throw new Error(
+            `Please wait ${retryAfterMinutes} minute${
+              retryAfterMinutes === 1 ? "" : "s"
+            } before requesting another email.`
+          );
+        }
+        throw new Error(json?.error ?? "Failed to resend verification email.");
+      }
       
       setMessage("Verification email has been resent via Nodemailer. Please check your inbox.");
     } catch (err) {
@@ -209,6 +234,11 @@ export default function VerifyPage() {
           {verificationStatus === "pending" ? (
             <div className="inline-flex items-center justify-center rounded-full bg-gold/10 border border-gold/10 px-3 py-1 text-xs font-semibold text-gold">
               Status: Pending verification
+            </div>
+          ) : null}
+          {verificationStatus === "expired" ? (
+            <div className="inline-flex items-center justify-center rounded-full bg-red-500/10 border border-red-400/20 px-3 py-1 text-xs font-semibold text-red-600">
+              Status: Link expired
             </div>
           ) : null}
         </div>

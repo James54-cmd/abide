@@ -25,6 +25,7 @@ export default function LoginPage() {
   const [isLoadingCredentials, setIsLoadingCredentials] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isResending, setIsResending] = useState(false);
 
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
@@ -73,16 +74,17 @@ export default function LoginPage() {
 
       if (mode === "signup") {
         const redirectTo = getAuthRedirectUrl();
+        const normalizedEmail = email.trim().toLowerCase();
         const result = await signUpWithGraphql({
           fullName: fullName.trim(),
-          email,
+          email: normalizedEmail,
           password,
           redirectTo,
         });
 
         if (result.success) {
           // Store credentials temporarily for auto-login on verification
-          sessionStorage.setItem("abide_pending_email", email);
+          sessionStorage.setItem("abide_pending_email", normalizedEmail);
           sessionStorage.setItem("abide_pending_password", password);
 
           if (result.accessToken && result.refreshToken) {
@@ -92,7 +94,7 @@ export default function LoginPage() {
               refresh_token: result.refreshToken,
             });
           }
-          router.push(`/verify?email=${encodeURIComponent(email)}`);
+          router.push(`/verify?email=${encodeURIComponent(normalizedEmail)}`);
           return;
         }
 
@@ -101,7 +103,7 @@ export default function LoginPage() {
       }
 
       const result = await loginWithGraphql({
-        email,
+        email: email.trim().toLowerCase(),
         password,
       });
 
@@ -123,11 +125,69 @@ export default function LoginPage() {
 
       router.replace("/");
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : `Unable to ${mode === "signup" ? "sign up" : "log in"}.`
-      );
+      const fallbackError = `Unable to ${mode === "signup" ? "sign up" : "log in"}.`;
+      const nextError = err instanceof Error ? err.message : fallbackError;
+
+      if (mode === "signup" && email.trim()) {
+        const normalizedEmail = email.trim().toLowerCase();
+        try {
+          const statusResponse = await fetch(
+            `/api/auth/verify-status?email=${encodeURIComponent(normalizedEmail)}`
+          );
+          const statusJson = (await statusResponse.json()) as { status?: string };
+          if (statusJson.status === "pending" || statusJson.status === "expired") {
+            router.push(`/resend_verification?email=${encodeURIComponent(normalizedEmail)}`);
+            return;
+          }
+        } catch {
+          // fall back to the signup error shown below
+        }
+      }
+
+      setError(nextError);
     } finally {
       setIsLoadingCredentials(false);
+    }
+  };
+
+  const handleResendFromLogin = async () => {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      setError("Enter your email first to resend verification.");
+      return;
+    }
+
+    try {
+      setIsResending(true);
+      setMessage(null);
+      setError(null);
+
+      const response = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: normalizedEmail }),
+      });
+
+      const json = (await response.json()) as
+        | { success?: boolean; error?: string; retryAfterSeconds?: number }
+        | undefined;
+      if (!response.ok) {
+        if (response.status === 429 && typeof json?.retryAfterSeconds === "number") {
+          const retryAfterMinutes = Math.ceil(json.retryAfterSeconds / 60);
+          throw new Error(
+            `Please wait ${retryAfterMinutes} minute${
+              retryAfterMinutes === 1 ? "" : "s"
+            } before requesting another email.`
+          );
+        }
+        throw new Error(json?.error ?? "Failed to resend verification email.");
+      }
+
+      router.push(`/resend_verification?email=${encodeURIComponent(normalizedEmail)}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to resend verification email.");
+    } finally {
+      setIsResending(false);
     }
   };
 
@@ -193,7 +253,7 @@ export default function LoginPage() {
 
         <button
           onClick={handleCredentialsSubmit}
-          disabled={isLoadingCredentials}
+          disabled={isLoadingCredentials || isResending}
           className="w-full bg-gold text-white rounded-full py-3.5 text-sm font-semibold shadow-warm transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {isLoadingCredentials
@@ -204,6 +264,16 @@ export default function LoginPage() {
               ? "Create account"
               : "Log in"}
         </button>
+
+        {mode === "login" ? (
+          <button
+            onClick={handleResendFromLogin}
+            disabled={isLoadingCredentials || isResending || !email.trim()}
+            className="w-full border border-gold/20 text-gold rounded-full py-3.5 text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {isResending ? "Sending verification..." : "Resend verification email"}
+          </button>
+        ) : null}
 
         {message ? <p className="text-xs text-green-700 text-center">{message}</p> : null}
         {error ? <p className="text-xs text-red-600 text-center">{error}</p> : null}

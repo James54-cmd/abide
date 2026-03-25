@@ -29,5 +29,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ status: "pending" });
   }
 
-  return NextResponse.json({ status: profile.verification_status });
+  const status =
+    profile.verification_status === "verified" ||
+    profile.verification_status === "pending" ||
+    profile.verification_status === "expired"
+      ? profile.verification_status
+      : "pending";
+
+  return NextResponse.json({ status });
 }

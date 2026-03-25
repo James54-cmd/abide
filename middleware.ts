@@ -8,7 +8,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/login") ||
     pathname.startsWith("/auth/callback") ||
     pathname.startsWith("/auth/verify-token") ||
-    pathname.startsWith("/verify");
+    pathname.startsWith("/verify") ||
+    pathname.startsWith("/resend_verification");
 
   if (isApiRoute) {
     return NextResponse.next();
@@ -51,11 +52,20 @@ export async function middleware(request: NextRequest) {
     // Check custom verification status in profiles
     const { data: profile } = await supabase
       .from("profiles")
-      .select("verification_status")
+      .select("verification_status, email")
       .eq("id", user.id)
       .single();
 
-    const isVerified = profile?.verification_status === "verified";
+    const verificationStatus = profile?.verification_status;
+    const isVerified = verificationStatus === "verified";
+
+    if (verificationStatus === "expired" && pathname !== "/resend_verification") {
+      const resendUrl = new URL("/resend_verification", request.url);
+      if (profile?.email) {
+        resendUrl.searchParams.set("email", profile.email);
+      }
+      return NextResponse.redirect(resendUrl);
+    }
 
     if (!isVerified && !isAuthRoute) {
       return NextResponse.redirect(new URL("/verify", request.url));

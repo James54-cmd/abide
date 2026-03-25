@@ -81,6 +81,12 @@ function splitChapterIntoVerses(rawText: string, chapterId: string) {
     .filter((v) => v.text.length > 0);
 }
 
+const VERIFICATION_TOKEN_TTL_MINUTES = 2;
+
+function createVerificationTokenExpiryIso() {
+  return new Date(Date.now() + VERIFICATION_TOKEN_TTL_MINUTES * 60 * 1000).toISOString();
+}
+
 const typeDefs = `
   input SignUpInput {
     fullName: String!
@@ -693,7 +699,9 @@ const resolvers = {
           .from("profiles")
           .update({ 
             verification_token: verificationToken,
-            verification_status: "pending" 
+            verification_status: "pending",
+            verification_token_expires_at: createVerificationTokenExpiryIso(),
+            verification_last_resent_at: null,
           })
           .eq("id", data.user?.id);
 
@@ -1290,7 +1298,7 @@ const resolvers = {
       const { email } = args;
 
       // Find user and token
-      const { data: user, error: userError } = await adminClient.auth.admin.listUsers();
+      const { data: user } = await adminClient.auth.admin.listUsers();
       const targetUser = user?.users.find(u => u.email === email);
       
       if (!targetUser) return true; // Fail silently or error if we want
@@ -1298,7 +1306,12 @@ const resolvers = {
       const verificationToken = crypto.randomUUID();
       await adminClient
         .from("profiles")
-        .update({ verification_token: verificationToken })
+        .update({
+          verification_token: verificationToken,
+          verification_status: "pending",
+          verification_token_expires_at: createVerificationTokenExpiryIso(),
+          verification_last_resent_at: new Date().toISOString(),
+        })
         .eq("id", targetUser.id);
 
       const verificationLink = `${process.env.NEXT_PUBLIC_SITE_URL}/auth/verify-token?token=${verificationToken}`;
