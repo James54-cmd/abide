@@ -27,6 +27,7 @@ export default function BibleVerseItem({
   return (
     <motion.div
       key={verse.reference}
+      id={`verse-${verse.reference.replace(/[:\s]/g, "-")}`}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ delay: Math.min(index * 0.01, 0.1), duration: 0.15 }}

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import PageTransition from "@/components/PageTransition";
 import EmptyState from "@/components/ui/EmptyState";
@@ -33,6 +34,20 @@ export default function BiblePage() {
     state.selectedChapter?.number ?? "",
     state.translation
   );
+
+  useEffect(() => {
+    if (state.selectedVerseIds.length === 1 && !state.isLoading) {
+      const ref = state.selectedVerseIds[0];
+      const sanitized = ref.replace(/[:\s]/g, "-");
+      const timer = setTimeout(() => {
+        const el = document.getElementById(`verse-${sanitized}`);
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 400);
+      return () => clearTimeout(timer);
+    }
+  }, [state.selectedVerseIds, state.isLoading]);
 
   return (
     <PageTransition>
@@ -110,9 +125,14 @@ export default function BiblePage() {
             fontFamily={state.fontFamily}
             lineSpacing={state.lineSpacing}
             verseTextClasses={state.verseTextClasses}
+            verses={state.verses}
+            activeVerseId={state.selectedVerseIds[0] || null}
             onTranslationChange={state.handleTranslationChange}
             onBookChange={state.handleBookChange}
             onChapterChange={state.handleChapterChange}
+            onVerseChange={(ref) => {
+              state.setSelectedVerseIds([ref]);
+            }}
             onFontSizeChange={state.setFontSize}
             onFontFamilyChange={state.setFontFamily}
             onLineSpacingChange={state.setLineSpacing}

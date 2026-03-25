@@ -13,6 +13,7 @@ import type {
   LineSpacing,
   BibleBook,
   BibleChapter,
+  BibleVerse,
 } from "@/features/bible/types";
 import { FONT_SIZE_LABELS } from "@/features/bible/types";
 
@@ -28,9 +29,12 @@ interface BibleSettingsSheetProps {
   fontFamily: FontFamily;
   lineSpacing: LineSpacing;
   verseTextClasses: string;
+  verses: BibleVerse[];
+  activeVerseId: string | null;
   onTranslationChange: (v: Translation) => void;
   onBookChange: (v: string) => void;
   onChapterChange: (v: string) => void;
+  onVerseChange: (v: string) => void;
   onFontSizeChange: (v: FontSize) => void;
   onFontFamilyChange: (v: FontFamily) => void;
   onLineSpacingChange: (v: LineSpacing) => void;
@@ -49,9 +53,12 @@ export default function BibleSettingsSheet({
   fontFamily,
   lineSpacing,
   verseTextClasses,
+  verses,
+  activeVerseId,
   onTranslationChange,
   onBookChange,
   onChapterChange,
+  onVerseChange,
   onFontSizeChange,
   onFontFamilyChange,
   onLineSpacingChange,
@@ -59,7 +66,6 @@ export default function BibleSettingsSheet({
 }: BibleSettingsSheetProps) {
   const [testamentTab, setTestamentTab] = useState<"OT" | "NT">("OT");
 
-  // Sync tab with selected book on mount or when book changes externally
   useEffect(() => {
     if (selectedBook?.testament) {
       setTestamentTab(selectedBook.testament);
@@ -186,6 +192,38 @@ export default function BibleSettingsSheet({
                     ))}
                   </DropdownMenuSelect>
                 </div>
+              </div>
+
+              {/* Verse Selection */}
+              <div className="space-y-1">
+                <p className="text-[10px] font-medium text-muted/60 uppercase px-1">Verse</p>
+                <DropdownMenuSelect
+                  value={activeVerseId || ""}
+                  onValueChange={(v) => {
+                    onVerseChange(v);
+                    onClose();
+                  }}
+                  label={activeVerseId ? `Verse ${activeVerseId.split(':').pop()}` : "Pick a Verse"}
+                  disabled={verses.length === 0}
+                >
+                  <div className="grid grid-cols-5 gap-1 p-2">
+                    {verses.map((v) => (
+                      <button
+                        key={v.reference}
+                        onClick={() => {
+                          onVerseChange(v.reference);
+                          onClose();
+                        }}
+                        className={cn(
+                          "h-10 rounded-lg text-xs font-semibold transition-all hover:bg-gold/10",
+                          activeVerseId === v.reference ? "bg-gold text-white shadow-sm" : "bg-slate-50 dark:bg-slate-800/50 text-muted"
+                        )}
+                      >
+                        {v.verse}
+                      </button>
+                    ))}
+                  </div>
+                </DropdownMenuSelect>
               </div>
             </div>
           </section>
