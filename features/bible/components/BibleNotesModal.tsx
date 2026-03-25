@@ -34,7 +34,10 @@ export default function BibleNotesModal({
   const activeVerseNum = activeVerseForNote ? parseInt(activeVerseForNote.split(':').pop() || "") : null;
   
   const filteredNotes = activeVerseForNote && !isNaN(activeVerseNum as number)
-    ? notes.filter(n => n.verse_start === activeVerseNum)
+    ? notes.filter(n => 
+        (activeVerseNum as number) >= n.verse_start && 
+        (activeVerseNum as number) <= (n.verse_end || n.verse_start)
+      )
     : notes;
 
   const sortedNotes = [...filteredNotes].sort((a, b) => 
