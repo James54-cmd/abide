@@ -139,42 +139,47 @@ export default function BibleNotesModal({
             ) : (
               <div className="space-y-2">
                 {sortedNotes.map((note) => (
-                  <div key={note.id} className="rounded-xl bg-parchment/40 dark:bg-dark-bg/40 p-3 border border-gold/5 group relative">
-                    <div className="flex items-start justify-between gap-2">
+                  <div 
+                    key={note.id} 
+                    className="rounded-xl bg-parchment/40 dark:bg-dark-bg/40 p-3.5 border border-gold/10 group relative hover:border-gold/30 transition-all shadow-sm active:scale-[0.99]"
+                  >
+                    <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
-                        <p className="text-[10px] font-bold text-gold/60 uppercase tracking-widest">{note.translation}</p>
-                        <p className="text-sm mt-1 whitespace-pre-wrap text-ink dark:text-parchment leading-relaxed">{note.content}</p>
-                        <p className="text-[10px] text-muted mt-2 font-medium">
-                          {new Date(note.created_at).toLocaleDateString(undefined, { 
-                            month: 'short', 
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
-                          {note.updated_at && note.updated_at !== note.created_at && (
-                            <span className="ml-1 opacity-60">
-                              (Edited: {new Date(note.updated_at).toLocaleDateString(undefined, { 
-                                hour: '2-digit', 
-                                minute: '2-digit' 
-                              })})
-                            </span>
-                          )}
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className="text-[10px] font-bold text-gold/60 uppercase tracking-widest">{note.translation}</span>
+                          <span className="w-1 h-1 rounded-full bg-gold/20" />
+                          <span className="text-[10px] text-muted font-medium">
+                            {new Date(note.created_at).toLocaleDateString(undefined, { 
+                              month: 'short', 
+                              day: 'numeric',
+                              hour: '2-digit', 
+                              minute: '2-digit'
+                            })}
+                          </span>
+                        </div>
+                        <p className="text-sm whitespace-pre-wrap text-ink dark:text-parchment leading-relaxed font-serif">
+                          {note.content}
                         </p>
+                        {note.updated_at && note.updated_at !== note.created_at && (
+                          <p className="text-[9px] text-gold/40 mt-1.5 italic">
+                            Edited: {new Date(note.updated_at).toLocaleDateString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        )}
                       </div>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 -mt-1 -mr-1">
                         <button
                           onClick={() => onEditNote(note)}
-                          className="p-1.5 rounded-lg hover:bg-gold/10 text-gold transition-all active:scale-90"
+                          className="p-1 px-1.5 rounded-lg hover:bg-gold/10 text-gold-600 transition-colors"
                           title="Edit"
                         >
-                           <span className="text-[10px] font-bold px-1">Edit</span>
+                           <span className="text-[10px] font-bold">Edit</span>
                         </button>
                         <button
                           onClick={() => onDeleteNote(note.id)}
-                          className="p-1 px-1.5 rounded-lg hover:bg-red-50 hover:text-red-500 text-muted/40 transition-all active:scale-90"
+                          className="p-1.5 rounded-lg hover:bg-red-50 hover:text-red-500 text-muted/30 transition-colors"
                           title="Delete"
                         >
-                          <X className="w-3.5 h-3.5" />
+                          <X className="w-3.5 h-3.5" strokeWidth={2} />
                         </button>
                       </div>
                     </div>

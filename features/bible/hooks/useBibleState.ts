@@ -397,6 +397,7 @@ export function useBibleState() {
     setEditingNoteId(null);
     setActiveVerseForNote(null);
     setActiveVerseNumForNote(null);
+    setIsNotesOpen(false);
   };
 
   const handleDeleteNote = async (noteId: string) => {
