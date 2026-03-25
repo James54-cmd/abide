@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import AuthShell from "@/components/auth/AuthShell";
 import { loginWithGraphql, signUpWithGraphql } from "@/lib/graphql/auth";
@@ -25,6 +25,24 @@ export default function LoginPage() {
   const [isLoadingCredentials, setIsLoadingCredentials] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const msg = searchParams.get("message");
+    const err = searchParams.get("error");
+    
+    if (msg) {
+      setMessage(msg);
+      setMode("login");
+      // Clean up URL
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+    if (err) {
+      setError(err);
+      setMode("login");
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
 
   const validateForm = () => {
     if (mode === "signup" && !fullName.trim()) {
@@ -62,14 +80,15 @@ export default function LoginPage() {
           redirectTo,
         });
 
-        if (result.accessToken && result.refreshToken) {
-          const supabase = getSupabaseBrowserClient();
-          const { error: setSessionError } = await supabase.auth.setSession({
-            access_token: result.accessToken,
-            refresh_token: result.refreshToken,
-          });
-          if (setSessionError) throw setSessionError;
-          router.replace("/");
+        if (result.success) {
+          if (result.accessToken && result.refreshToken) {
+            const supabase = getSupabaseBrowserClient();
+            await supabase.auth.setSession({
+              access_token: result.accessToken,
+              refresh_token: result.refreshToken,
+            });
+          }
+          router.push(`/verify?email=${encodeURIComponent(email)}`);
           return;
         }
 
@@ -81,6 +100,11 @@ export default function LoginPage() {
         email,
         password,
       });
+
+      if (!result.success) {
+        setError(result.message ?? "Login failed.");
+        return;
+      }
 
       if (!result.accessToken || !result.refreshToken) {
         throw new Error("Login did not return session tokens.");

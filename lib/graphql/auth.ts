@@ -70,3 +70,19 @@ export async function loginWithGraphql(input: { email: string; password: string 
 
   return data.login;
 }
+
+const RESEND_VERIFICATION_MUTATION = gql`
+  mutation ResendVerification($email: String!) {
+    resendVerification(email: $email)
+  }
+`;
+
+export async function resendVerificationWithGraphql(email: string) {
+  const client = getApolloClient();
+  const { data } = await client.mutate<{ resendVerification: boolean }>({
+    mutation: RESEND_VERIFICATION_MUTATION,
+    variables: { email },
+  });
+
+  return data?.resendVerification ?? false;
+}

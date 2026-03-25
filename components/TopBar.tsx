@@ -39,6 +39,25 @@ export default function TopBar() {
     conversations: [],
     activeConversationId: null,
   });
+  const [isVerified, setIsVerified] = useState<boolean>(false);
+
+  useEffect(() => {
+    const checkVerification = async () => {
+      const supabase = getSupabaseBrowserClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: profile } = await (supabase
+        .from("profiles")
+        .select("verification_status")
+        .eq("id", user.id)
+        .single() as any);
+      
+      setIsVerified(profile?.verification_status === "verified");
+    };
+
+    checkVerification();
+  }, []);
 
   useEffect(() => {
     const handleBibleHeader = (event: Event) => {
@@ -107,9 +126,21 @@ export default function TopBar() {
           className="flex items-center gap-2 min-w-0 flex-1 rounded-lg -ml-1 pl-1 pr-2 py-1 hover:bg-gold/5 transition-colors"
         >
           <Cross className="w-5 h-5 text-gold flex-shrink-0" strokeWidth={1.5} aria-hidden />
-          <span className="text-xl font-serif font-semibold text-ink dark:text-parchment tracking-tight">
-            Abide
-          </span>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="text-xl font-serif font-semibold text-ink dark:text-parchment tracking-tight truncate">
+              Abide
+            </span>
+            {isVerified && (
+              <div 
+                className="flex items-center justify-center w-3.5 h-3.5 bg-green-500 rounded-full flex-shrink-0 shadow-sm"
+                title="Verified Account"
+              >
+                <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 text-white stroke-[4px]" fill="none" stroke="currentColor">
+                  <path d="M20 6L9 17L4 12" />
+                </svg>
+              </div>
+            )}
+          </div>
         </Link>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

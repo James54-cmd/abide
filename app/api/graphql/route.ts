@@ -13,6 +13,7 @@ import {
 import { getSafeAuthRedirectUrl } from "@/lib/auth/redirect";
 import { generateEncouragementForUser } from "@/lib/server/chat-generation";
 import { requireUserFromAuthHeader } from "@/lib/server/supabase-admin";
+import { sendVerificationEmail } from "@/lib/server/email";
 
 type Translation = "NIV" | "NLT";
 
@@ -242,6 +243,8 @@ const typeDefs = `
     deleteBibleNote(id: String!): Boolean!
     deleteChatConversation(id: String!): Boolean!
     generateEncouragement(input: GenerateEncouragementInput!): GenerateEncouragementPayload!
+    resendVerification(email: String!): Boolean!
+    verifyEmail(token: String!): Boolean!
   }
 
   type Query {
@@ -555,36 +558,59 @@ const resolvers = {
     ) => {
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
       const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-      if (!supabaseUrl || !supabaseAnonKey) {
+      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+      if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
         throw new Error("Supabase env vars are missing.");
       }
 
       const supabase = createClient(supabaseUrl, supabaseAnonKey);
+      const adminClient = createClient(supabaseUrl, supabaseServiceKey);
+      
       const { fullName, email, password, redirectTo } = args.input;
       const safeRedirectTo = getSafeAuthRedirectUrl({
         requestedRedirectTo: redirectTo,
         siteUrl: process.env.NEXT_PUBLIC_SITE_URL,
       });
-      const { data, error } = await supabase.auth.signUp({
+
+      const { data, error } = await adminClient.auth.admin.createUser({
         email,
         password,
-        options: {
-          data: { full_name: fullName },
-          ...(safeRedirectTo ? { emailRedirectTo: safeRedirectTo } : {}),
-        },
+        email_confirm: false,
+        user_metadata: { full_name: fullName },
       });
 
       if (error) {
         throw new Error(error.message);
       }
 
+      // Custom verification token
+      const verificationToken = crypto.randomUUID();
+
+      try {
+        // Store token in profile
+        const { error: profileError } = await adminClient
+          .from("profiles")
+          .update({ 
+            verification_token: verificationToken,
+            verification_status: "pending" 
+          })
+          .eq("id", data.user?.id);
+
+        if (profileError) throw profileError;
+
+        // Send custom link
+        const verificationLink = `${process.env.NEXT_PUBLIC_SITE_URL}/auth/verify-token?token=${verificationToken}`;
+        await sendVerificationEmail(email, verificationLink);
+      } catch (err) {
+        console.error("Failed to send verification email:", err);
+      }
+
       return {
         success: true,
-        message: data.session
-          ? "Account created."
-          : "Account created. Please check your email to confirm your signup.",
-        accessToken: data.session?.access_token ?? null,
-        refreshToken: data.session?.refresh_token ?? null,
+        message: "Account created. Please check your email to confirm your signup.",
+        accessToken: null,
+        refreshToken: null,
       };
     },
     login: async (
@@ -845,6 +871,71 @@ const resolvers = {
         conversationId: result.conversationId,
         encouragement: result.encouragement,
       };
+    },
+    resendVerification: async (_: unknown, args: { email: string }) => {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!supabaseUrl || !supabaseServiceKey) {
+        throw new Error("Supabase env vars are missing.");
+      }
+
+      const adminClient = createClient(supabaseUrl, supabaseServiceKey);
+      const { email } = args;
+
+      // Find user and token
+      const { data: user, error: userError } = await adminClient.auth.admin.listUsers();
+      const targetUser = user?.users.find(u => u.email === email);
+      
+      if (!targetUser) return true; // Fail silently or error if we want
+
+      const verificationToken = crypto.randomUUID();
+      await adminClient
+        .from("profiles")
+        .update({ verification_token: verificationToken })
+        .eq("id", targetUser.id);
+
+      const verificationLink = `${process.env.NEXT_PUBLIC_SITE_URL}/auth/verify-token?token=${verificationToken}`;
+      await sendVerificationEmail(email, verificationLink);
+
+      return true;
+    },
+    verifyEmail: async (_: unknown, args: { token: string }) => {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!supabaseUrl || !supabaseServiceKey) {
+        throw new Error("Supabase env vars are missing.");
+      }
+
+      const adminClient = createClient(supabaseUrl, supabaseServiceKey);
+      const { token } = args;
+
+      const { data: profile, error: profileError } = await adminClient
+        .from("profiles")
+        .select("id")
+        .eq("verification_token", token)
+        .single();
+
+      if (profileError || !profile) {
+        throw new Error("Invalid or expired verification token.");
+      }
+
+      // Mark as verified
+      const { error: updateError } = await adminClient
+        .from("profiles")
+        .update({ 
+          verification_status: "verified",
+          verification_token: null 
+        })
+        .eq("id", profile.id);
+
+      if (updateError) throw updateError;
+
+      // Also confirm in auth.users so Supabase knows
+      await adminClient.auth.admin.updateUserById(profile.id, {
+        email_confirm: true
+      });
+
+      return true;
     },
   },
 };

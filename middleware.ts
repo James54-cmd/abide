@@ -4,7 +4,11 @@ import { NextRequest, NextResponse } from "next/server";
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const isApiRoute = pathname.startsWith("/api");
-  const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/auth/callback");
+  const isAuthRoute =
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/auth/callback") ||
+    pathname.startsWith("/auth/verify-token") ||
+    pathname.startsWith("/verify");
 
   if (isApiRoute) {
     return NextResponse.next();
@@ -43,8 +47,25 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  if (user && isAuthRoute) {
-    return NextResponse.redirect(new URL("/", request.url));
+  if (user) {
+    // Check custom verification status in profiles
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("verification_status")
+      .eq("id", user.id)
+      .single();
+
+    const isVerified = profile?.verification_status === "verified";
+
+    if (!isVerified && !isAuthRoute) {
+      return NextResponse.redirect(new URL("/verify", request.url));
+    }
+
+    if (isVerified && isAuthRoute && pathname !== "/verify") {
+       if (pathname === "/login") {
+         return NextResponse.redirect(new URL("/", request.url));
+       }
+    }
   }
 
   return response;
