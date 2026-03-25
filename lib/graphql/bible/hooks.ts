@@ -1,11 +1,20 @@
 import { getApolloClient } from "@/lib/graphql/client";
 import { BIBLE_BOOTSTRAP_QUERY } from "./queries";
-import { SAVE_BIBLE_PROGRESS_MUTATION } from "./mutations";
-import type {
+import { 
+  SAVE_BIBLE_PROGRESS_MUTATION,
+  SAVE_BIBLE_NOTE_MUTATION,
+  DELETE_BIBLE_NOTE_MUTATION,
+  SAVE_BIBLE_HIGHLIGHT_MUTATION,
+  DELETE_BIBLE_HIGHLIGHT_MUTATION
+} from "./mutations";
+import {
   BibleBook,
   BibleChapter,
   BibleVerse,
+  BibleHighlight,
+  BibleNote,
   BibleProgress,
+  Translation,
 } from "@/features/bible/types";
 
 export type BibleBootstrapPayload = {
@@ -55,6 +64,98 @@ export async function saveBibleProgress(
   await client.mutate({
     mutation: SAVE_BIBLE_PROGRESS_MUTATION,
     variables: { input },
+    context: { headers: { Authorization: `Bearer ${token}` } },
+  });
+}
+
+export async function saveBibleNote(
+  token: string,
+  input: {
+    id?: string | null;
+    translation: string;
+    bookId: string;
+    chapterId: string;
+    verseStart: number;
+    verseEnd: number;
+    content: string;
+  }
+) {
+  const client = getApolloClient();
+  const { data } = await client.mutate<{ saveBibleNote: any }>({
+    mutation: SAVE_BIBLE_NOTE_MUTATION,
+    variables: { input },
+    context: { headers: { Authorization: `Bearer ${token}` } },
+  });
+  const raw = data?.saveBibleNote;
+  if (!raw) return undefined;
+  // Map camelCase from GraphQL back to snake_case for local BibleNote type
+  return {
+    id: raw.id,
+    translation: raw.translation as Translation,
+    book_id: raw.bookId,
+    chapter_id: raw.chapterId,
+    verse_start: raw.verseStart,
+    verse_end: raw.verseEnd,
+    content: raw.content,
+    created_at: raw.createdAt,
+    updated_at: raw.updatedAt,
+  } as BibleNote;
+}
+
+export async function deleteBibleNote(
+  token: string,
+  id: string
+) {
+  const client = getApolloClient();
+  await client.mutate({
+    mutation: DELETE_BIBLE_NOTE_MUTATION,
+    variables: { id },
+    context: { headers: { Authorization: `Bearer ${token}` } },
+  });
+}
+
+export async function saveBibleHighlight(
+  token: string,
+  input: {
+    id?: string | null;
+    translation: string;
+    bookId: string;
+    chapterId: string;
+    verseStart: number;
+    verseEnd: number;
+    color: string;
+  }
+) {
+  const client = getApolloClient();
+  const { data } = await client.mutate<{ saveBibleHighlight: any }>({
+    mutation: SAVE_BIBLE_HIGHLIGHT_MUTATION,
+    variables: { input },
+    context: { headers: { Authorization: `Bearer ${token}` } },
+  });
+  const raw = data?.saveBibleHighlight;
+  if (!raw) return undefined;
+  // Map camelCase from GraphQL back to snake_case for local BibleHighlight type
+  return {
+    id: raw.id,
+    translation: raw.translation as Translation,
+    book_id: raw.bookId,
+    chapter_id: raw.chapterId,
+    verse_start: raw.verseStart,
+    verse_end: raw.verseEnd,
+    color: raw.color,
+    created_at: raw.createdAt,
+    updated_at: raw.updatedAt,
+  } as BibleHighlight;
+}
+
+export async function deleteBibleHighlight(
+  token: string,
+  id: string
+) {
+  const client = getApolloClient();
+  await client.mutate({
+    mutation: DELETE_BIBLE_HIGHLIGHT_MUTATION,
+    variables: { id },
     context: { headers: { Authorization: `Bearer ${token}` } },
   });
 }

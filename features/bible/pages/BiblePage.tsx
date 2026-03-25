@@ -71,14 +71,14 @@ export default function BiblePage() {
                 >
                   {state.verses.map((verse, idx) => {
                     const highlight = state.highlights.find(h => h.verse_start === verse.verse);
-                    const note = state.notes.find(n => n.verse_start === verse.verse);
+                    const verseNotes = state.notes.filter(n => n.verse_start === verse.verse);
                     return (
                       <BibleVerseItem
                         key={verse.reference}
                         verse={verse}
                         isActive={state.selectedVerseIds.includes(verse.reference)}
                         highlightColor={highlight?.color}
-                        hasNote={!!note}
+                        noteCount={verseNotes.length}
                         verseTextClasses={state.verseTextClasses}
                         index={idx}
                         onToggleActive={(ref) => {

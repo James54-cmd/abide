@@ -13,3 +13,47 @@ export const SAVE_BIBLE_PROGRESS_MUTATION = gql`
     }
   }
 `;
+
+export const SAVE_BIBLE_NOTE_MUTATION = gql`
+  mutation SaveBibleNote($input: SaveBibleNoteInput!) {
+    saveBibleNote(input: $input) {
+      id
+      translation
+      bookId
+      chapterId
+      verseStart
+      verseEnd
+      content
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+export const DELETE_BIBLE_NOTE_MUTATION = gql`
+  mutation DeleteBibleNote($id: String!) {
+    deleteBibleNote(id: $id)
+  }
+`;
+
+export const SAVE_BIBLE_HIGHLIGHT_MUTATION = gql`
+  mutation SaveBibleHighlight($input: SaveBibleHighlightInput!) {
+    saveBibleHighlight(input: $input) {
+      id
+      translation
+      bookId
+      chapterId
+      verseStart
+      verseEnd
+      color
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+export const DELETE_BIBLE_HIGHLIGHT_MUTATION = gql`
+  mutation DeleteBibleHighlight($id: String!) {
+    deleteBibleHighlight(id: $id)
+  }
+`;

@@ -9,7 +9,7 @@ interface BibleVerseItemProps {
   verse: BibleVerse;
   isActive: boolean;
   highlightColor?: string | null;
-  hasNote?: boolean;
+  noteCount?: number;
   verseTextClasses: string;
   index: number;
   onToggleActive: (reference: string) => void;
@@ -19,7 +19,7 @@ export default function BibleVerseItem({
   verse,
   isActive,
   highlightColor,
-  hasNote,
+  noteCount,
   verseTextClasses,
   index,
   onToggleActive,
@@ -43,11 +43,14 @@ export default function BibleVerseItem({
           verseTextClasses,
           isActive && "underline decoration-gold decoration-dotted underline-offset-4 decoration-2"
         )}>
-          <sup className="text-gold font-bold text-[0.65em] mr-1 select-none">
+          <sup className="text-gold font-bold text-[0.65em] mr-1 select-none inline-flex items-center gap-1 leading-none">
             {verse.verse}
-            {hasNote && (
-              <span className="inline-block ml-0.5 w-1.5 h-1.5 rounded-full bg-gold/60" />
-            )}
+            {noteCount && noteCount > 0 ? (
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-gold/15 text-gold-700 dark:text-gold-400 font-bold border border-gold/10 transform -translate-y-[1px]">
+                <MessageSquare className="w-2.5 h-2.5" />
+                <span className="text-[0.85em]">{noteCount}</span>
+              </span>
+            ) : null}
           </sup>
           <span className={cn(
             highlightColor && "box-decoration-clone rounded px-1 py-[2px] -mx-1 transition-colors duration-300",
