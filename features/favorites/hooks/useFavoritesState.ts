@@ -9,6 +9,9 @@ import { toast } from "sonner";
 export function useFavoritesState() {
   const [favorites, setFavorites] = useState<BibleFavorite[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [pendingFavoriteId, setPendingFavoriteId] = useState<string | null>(null);
+  const [isConfirming, setIsConfirming] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -45,7 +48,40 @@ export function useFavoritesState() {
     }
   };
 
-  return { favorites, handleRemove, isLoading };
+  const requestRemove = (id: string) => {
+    setPendingFavoriteId(id);
+    setIsConfirmOpen(true);
+  };
+
+  const cancelRemove = () => {
+    setIsConfirmOpen(false);
+    setPendingFavoriteId(null);
+  };
+
+  const confirmRemove = async () => {
+    if (!pendingFavoriteId) return;
+
+    try {
+      setIsConfirming(true);
+      await handleRemove(pendingFavoriteId);
+    } finally {
+      setIsConfirming(false);
+      cancelRemove();
+    }
+  };
+
+  return {
+    favorites,
+    handleRemove,
+    isLoading,
+
+    // Confirm modal state + actions
+    isConfirmOpen,
+    isConfirming,
+    requestRemove,
+    cancelRemove,
+    confirmRemove,
+  };
 }
 
 export type FavoritesState = ReturnType<typeof useFavoritesState>;

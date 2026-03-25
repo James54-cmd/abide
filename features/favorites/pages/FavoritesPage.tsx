@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Heart, Trash2 } from "lucide-react";
 import Link from "next/link";
@@ -10,10 +9,15 @@ import { useFavoritesState } from "@/features/favorites/hooks/useFavoritesState"
 import ConfirmActionModal from "@/components/ui/ConfirmActionModal";
 
 export default function FavoritesPage() {
-  const { favorites, handleRemove, isLoading } = useFavoritesState();
-  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
-  const [pendingFavoriteId, setPendingFavoriteId] = useState<string | null>(null);
-  const [isConfirming, setIsConfirming] = useState(false);
+  const {
+    favorites,
+    isLoading,
+    isConfirmOpen,
+    isConfirming,
+    requestRemove,
+    cancelRemove,
+    confirmRemove,
+  } = useFavoritesState();
 
   const formatFavoriteReference = (fav: (typeof favorites)[number]) => {
     if (!fav.book_name) return fav.verse_reference;
@@ -83,8 +87,7 @@ export default function FavoritesPage() {
 
                   <button
                     onClick={() => {
-                      setPendingFavoriteId(fav.id);
-                      setIsConfirmOpen(true);
+                      requestRemove(fav.id);
                     }}
                     className="absolute top-4 right-4 p-1.5 rounded-full text-muted/40 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all active:scale-95"
                     aria-label="Remove from favorites"
@@ -109,21 +112,8 @@ export default function FavoritesPage() {
         cancelText="Cancel"
         danger
         isConfirming={isConfirming}
-        onCancel={() => {
-          setIsConfirmOpen(false);
-          setPendingFavoriteId(null);
-        }}
-        onConfirm={async () => {
-          if (!pendingFavoriteId) return;
-          try {
-            setIsConfirming(true);
-            await handleRemove(pendingFavoriteId);
-          } finally {
-            setIsConfirming(false);
-            setIsConfirmOpen(false);
-            setPendingFavoriteId(null);
-          }
-        }}
+        onCancel={cancelRemove}
+        onConfirm={confirmRemove}
       />
     </PageTransition>
   );
