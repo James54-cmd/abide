@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import PageTransition from "@/components/PageTransition";
 import EmptyState from "@/components/ui/EmptyState";
@@ -9,51 +8,9 @@ import BibleSettingsSheet from "@/features/bible/components/BibleSettingsSheet";
 import BibleNotesModal from "@/features/bible/components/BibleNotesModal";
 import BibleActionBar from "@/features/bible/components/BibleActionBar";
 import { useBibleState } from "@/features/bible/hooks/useBibleState";
-import { getActiveHighlightColor, getFormattedSelectionCitation } from "@/features/bible/utils";
 
 export default function BiblePage() {
   const state = useBibleState();
-
-  const handleNoteAction = () => {
-    if (state.selectedVerseIds.length === 0) return;
-    const firstRef = state.selectedVerseIds[0];
-    const verseNum = state.verses.find(v => v.reference === firstRef)?.verse ?? 1;
-    state.handleOpenNote(firstRef, verseNum);
-  };
-
-  const activeHighlightColor = getActiveHighlightColor(
-    state.selectedVerseIds,
-    state.verses,
-    state.highlights
-  );
-
-  const selectedCitation = getFormattedSelectionCitation(
-    state.selectedVerseIds,
-    state.verses,
-    state.selectedBook?.name ?? "Bible",
-    state.selectedChapter?.number ?? "",
-    state.translation
-  );
-
-  const isSelectionFavorited = state.selectedVerseIds.length > 0 && 
-    state.selectedVerseIds.every(id => {
-      const vNum = state.verses.find(v => v.reference === id)?.verse;
-      return state.favorites.some(f => f.verse_start === vNum);
-    });
-
-  useEffect(() => {
-    if (state.selectedVerseIds.length === 1 && !state.isLoading) {
-      const ref = state.selectedVerseIds[0];
-      const sanitized = ref.replace(/[:\s]/g, "-");
-      const timer = setTimeout(() => {
-        const el = document.getElementById(`verse-${sanitized}`);
-        if (el) {
-          el.scrollIntoView({ behavior: "smooth", block: "center" });
-        }
-      }, 400);
-      return () => clearTimeout(timer);
-    }
-  }, [state.selectedVerseIds, state.isLoading]);
 
   return (
     <PageTransition>
@@ -111,10 +68,10 @@ export default function BiblePage() {
       <AnimatePresence>
         {state.selectedVerseIds.length > 0 && (
           <BibleActionBar
-            selectionLabel={selectedCitation}
-            activeColor={activeHighlightColor}
-            isFavorited={isSelectionFavorited}
-            onNote={handleNoteAction}
+            selectionLabel={state.selectedCitation}
+            activeColor={state.activeHighlightColor}
+            isFavorited={state.isSelectionFavorited}
+            onNote={state.handleNoteAction}
             onCopy={state.handleBulkCopy}
             onHighlight={state.handleBulkHighlight}
             onFavorite={state.handleBulkFavorite}

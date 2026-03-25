@@ -7,11 +7,8 @@ import {
   saveBibleProgress,
   saveBibleNote,
   deleteBibleNote,
-  saveBibleHighlight,
   bulkSaveBibleHighlights,
   bulkDeleteBibleHighlights,
-  saveBibleFavorite,
-  deleteBibleFavorite,
   bulkSaveBibleFavorites,
   bulkDeleteBibleFavorites,
 } from "@/lib/graphql/bible/hooks";
@@ -27,7 +24,6 @@ import type {
   BibleHighlight,
   BibleFavorite,
   BibleNote,
-  Note,
   BibleProgress,
 } from "@/features/bible/types";
 import {
@@ -35,6 +31,7 @@ import {
   FONT_FAMILY_CLASSES,
   LINE_SPACING_CLASSES,
 } from "@/features/bible/types";
+import { getActiveHighlightColor, getFormattedSelectionCitation } from "@/features/bible/utils";
 import { cn } from "@/lib/utils";
 
 /** Dedupes save mutation when React Strict Mode double-invokes effects (dev). */
@@ -422,6 +419,13 @@ export function useBibleState() {
     setIsNotesOpen(true);
   };
 
+  const handleNoteAction = useCallback(() => {
+    if (selectedVerseIds.length === 0) return;
+    const firstRef = selectedVerseIds[0];
+    const verseNum = verses.find((v) => v.reference === firstRef)?.verse ?? 1;
+    handleOpenNote(firstRef, verseNum);
+  }, [selectedVerseIds, verses, handleOpenNote]);
+
   const handleEditNote = (note: BibleNote) => {
     setActiveVerseForNote(
       `${bookId.toUpperCase()} ${selectedChapter?.number}:${note.verse_start}${
@@ -603,6 +607,30 @@ export function useBibleState() {
   );
 
   const chapterLabel = `${selectedBook?.name ?? "Bible"} ${selectedChapter?.number ?? ""}`;
+  const activeHighlightColor = useMemo(
+    () => getActiveHighlightColor(selectedVerseIds, verses, highlights),
+    [selectedVerseIds, verses, highlights]
+  );
+  const selectedCitation = useMemo(
+    () =>
+      getFormattedSelectionCitation(
+        selectedVerseIds,
+        verses,
+        selectedBook?.name ?? "Bible",
+        selectedChapter?.number ?? "",
+        translation
+      ),
+    [selectedVerseIds, verses, selectedBook?.name, selectedChapter?.number, translation]
+  );
+  const isSelectionFavorited = useMemo(
+    () =>
+      selectedVerseIds.length > 0 &&
+      selectedVerseIds.every((id) => {
+        const vNum = verses.find((v) => v.reference === id)?.verse;
+        return favorites.some((f) => f.verse_start === vNum);
+      }),
+    [selectedVerseIds, verses, favorites]
+  );
 
   // Event dispatches for TopBar / BottomNav
   useEffect(() => {
@@ -644,6 +672,19 @@ export function useBibleState() {
       window.removeEventListener("abide:bible-next-chapter", onNextChapter);
     };
   }, [handleNext, handlePrev]);
+
+  useEffect(() => {
+    if (selectedVerseIds.length !== 1 || isLoading) return;
+    const ref = selectedVerseIds[0];
+    const sanitized = ref.replace(/[:\s]/g, "-");
+    const timer = setTimeout(() => {
+      const el = document.getElementById(`verse-${sanitized}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [selectedVerseIds, isLoading]);
 
   // Settings sheet actions — re-bootstrap when translation, book, or chapter changes
   const handleTranslationChange = useCallback(
@@ -698,6 +739,9 @@ export function useBibleState() {
     fontFamily,
     lineSpacing,
     verseTextClasses,
+    activeHighlightColor,
+    selectedCitation,
+    isSelectionFavorited,
 
     // UI state
     isNavSheetOpen,
@@ -731,6 +775,7 @@ export function useBibleState() {
     handleNext,
     handleCopy,
     handleOpenNote,
+    handleNoteAction,
     handleEditNote,
     handleSaveNote,
     handleDeleteNote,
