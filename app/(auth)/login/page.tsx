@@ -81,6 +81,10 @@ export default function LoginPage() {
         });
 
         if (result.success) {
+          // Store credentials temporarily for auto-login on verification
+          sessionStorage.setItem("abide_pending_email", email);
+          sessionStorage.setItem("abide_pending_password", password);
+
           if (result.accessToken && result.refreshToken) {
             const supabase = getSupabaseBrowserClient();
             await supabase.auth.setSession({

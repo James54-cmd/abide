@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AuthShell from "@/components/auth/AuthShell";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
-import { resendVerificationWithGraphql } from "@/lib/graphql/auth";
+import { resendVerificationWithGraphql, loginWithGraphql } from "@/lib/graphql/auth";
 import { Mail, RefreshCw, LogOut } from "lucide-react";
 
 export default function VerifyPage() {
@@ -15,6 +15,8 @@ export default function VerifyPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let pollInterval: NodeJS.Timeout;
+
     const checkUser = async () => {
       const searchParams = new URLSearchParams(window.location.search);
       const queryEmail = searchParams.get("email");
@@ -26,17 +28,67 @@ export default function VerifyPage() {
       const { data: { user } } = await supabase.auth.getUser();
       
       if (user) {
-        if (user.email_confirmed_at) {
+        // Even if logged in, check custom status
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("verification_status")
+          .eq("id", user.id)
+          .single() as any;
+
+        if (profile?.verification_status === "verified") {
           router.replace("/");
           return;
         }
         setEmail(user.email ?? null);
       } else if (!queryEmail) {
         router.replace("/login");
+        return;
       }
+
+      // Start polling if not verified
+      pollInterval = setInterval(async () => {
+        const currentEmail = queryEmail || user?.email;
+        if (!currentEmail) return;
+
+        // Check profile status from Supabase (bypassing cache)
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("verification_status")
+          .eq("email", currentEmail)
+          .single() as any;
+
+        if (profile?.verification_status === "verified") {
+          clearInterval(pollInterval);
+          
+          // Auto-login if we have credentials
+          const storedPassword = sessionStorage.getItem("abide_pending_password");
+          if (storedPassword && currentEmail) {
+            try {
+              const result = await loginWithGraphql({ email: currentEmail, password: storedPassword });
+              if (result.accessToken && result.refreshToken) {
+                await supabase.auth.setSession({
+                  access_token: result.accessToken,
+                  refresh_token: result.refreshToken,
+                });
+                sessionStorage.removeItem("abide_pending_email");
+                sessionStorage.removeItem("abide_pending_password");
+                router.replace("/");
+              }
+            } catch (err) {
+              console.error("Auto-login failed:", err);
+              router.replace("/login?message=Verified! Please log in.");
+            }
+          } else {
+            router.replace("/login?message=Verified! Please log in.");
+          }
+        }
+      }, 3000);
     };
 
     checkUser();
+    return () => {
+      if (pollInterval) clearInterval(pollInterval);
+    };
   }, [router]);
 
   const handleResend = async () => {

@@ -47,6 +47,6 @@ export async function GET(request: NextRequest) {
     email_confirm: true
   });
 
-  // 4. Redirect to login with success message
-  return NextResponse.redirect(new URL("/login?message=Email verified! You can now log in.", request.url));
+  // 4. Redirect to verification success page
+  return NextResponse.redirect(new URL("/verify/success", request.url));
 }
