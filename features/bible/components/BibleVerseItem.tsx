@@ -1,28 +1,28 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Copy, MessageSquare } from "lucide-react";
+import { Copy, MessageSquare, Highlighter } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { BibleVerse } from "@/features/bible/types";
 
 interface BibleVerseItemProps {
   verse: BibleVerse;
   isActive: boolean;
+  highlightColor?: string | null;
+  hasNote?: boolean;
   verseTextClasses: string;
   index: number;
   onToggleActive: (reference: string) => void;
-  onOpenNote: (reference: string) => void;
-  onCopy: (verse: BibleVerse) => void;
 }
 
 export default function BibleVerseItem({
   verse,
   isActive,
+  highlightColor,
+  hasNote,
   verseTextClasses,
   index,
   onToggleActive,
-  onOpenNote,
-  onCopy,
 }: BibleVerseItemProps) {
   return (
     <motion.div
@@ -35,50 +35,31 @@ export default function BibleVerseItem({
     >
       <div
         className={cn(
-          "relative rounded-xl px-3 pt-2 pb-5 -mx-1 transition-colors",
-          isActive ? "bg-gold/[0.07] dark:bg-gold/[0.12]" : "hover:bg-gold/[0.04]"
+          "relative rounded-xl px-3 pt-1 pb-1 -mx-1 transition-colors hover:bg-gold/[0.04]"
         )}
       >
-        <p className={verseTextClasses}>
-          <sup className="text-gold font-bold text-[0.65em] mr-1 select-none">{verse.verse}</sup>
-          {verse.text}
+        <p className={cn(
+          verseTextClasses,
+          isActive && "underline decoration-gold decoration-dotted underline-offset-4 decoration-2"
+        )}>
+          <sup className="text-gold font-bold text-[0.65em] mr-1 select-none">
+            {verse.verse}
+            {hasNote && (
+              <span className="inline-block ml-0.5 w-1.5 h-1.5 rounded-full bg-gold/60" />
+            )}
+          </sup>
+          <span className={cn(
+            highlightColor && "box-decoration-clone rounded px-1 py-[2px] -mx-1 transition-colors duration-300",
+            highlightColor === 'gold' && "bg-amber-200 dark:bg-amber-500/40",
+            highlightColor === 'green' && "bg-emerald-200 dark:bg-emerald-500/40",
+            highlightColor === 'blue' && "bg-sky-200 dark:bg-sky-500/40",
+            highlightColor === 'rose' && "bg-rose-200 dark:bg-rose-500/40",
+            highlightColor === 'purple' && "bg-purple-200 dark:bg-purple-500/40"
+          )}>
+            {verse.text}
+          </span>
         </p>
-
-        <AnimatePresence>
-          {isActive ? (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.18 }}
-              className="overflow-hidden"
-            >
-              <div className="flex items-center gap-2 pt-2 pb-1">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onOpenNote(verse.reference);
-                  }}
-                  className="inline-flex items-center gap-1 text-xs font-medium text-muted hover:text-ink dark:hover:text-parchment bg-white dark:bg-dark-card border border-gold/10 rounded-lg px-2.5 py-1.5 transition-colors"
-                >
-                  <MessageSquare className="w-3.5 h-3.5" />
-                  Note
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onCopy(verse);
-                  }}
-                  className="inline-flex items-center gap-1 text-xs font-medium text-muted hover:text-ink dark:hover:text-parchment bg-white dark:bg-dark-card border border-gold/10 rounded-lg px-2.5 py-1.5 transition-colors"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                  Copy
-                </button>
-              </div>
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
-      </div>
+      </div>  
     </motion.div>
   );
 }

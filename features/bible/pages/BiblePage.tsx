@@ -6,14 +6,35 @@ import EmptyState from "@/components/ui/EmptyState";
 import BibleVerseItem from "@/features/bible/components/BibleVerseItem";
 import BibleSettingsSheet from "@/features/bible/components/BibleSettingsSheet";
 import BibleNotesModal from "@/features/bible/components/BibleNotesModal";
+import BibleActionBar from "@/features/bible/components/BibleActionBar";
 import { useBibleState } from "@/features/bible/hooks/useBibleState";
 
 export default function BiblePage() {
   const state = useBibleState();
 
+  const handleNoteAction = () => {
+    if (state.selectedVerseIds.length === 0) return;
+    const firstRef = state.selectedVerseIds[0];
+    const verseNum = state.verses.find(v => v.reference === firstRef)?.verse ?? 1;
+    state.handleOpenNote(firstRef, verseNum);
+  };
+
+  const activeHighlightColor = (() => {
+    if (state.selectedVerseIds.length === 0) return null;
+    const nums = state.selectedVerseIds.map(ref => state.verses.find(v => v.reference === ref)?.verse).filter(Boolean) as number[];
+    let firstColor: string | null = null;
+    for (const num of nums) {
+      const h = state.highlights.find(h => h.verse_start === num);
+      if (!h) return null;
+      if (!firstColor) firstColor = h.color;
+      else if (firstColor !== h.color) return null;
+    }
+    return firstColor;
+  })();
+
   return (
     <PageTransition>
-      <div className="bg-parchment dark:bg-dark-bg">
+      <div className="bg-parchment dark:bg-dark-bg min-h-screen pb-20">
         <main>
           <AnimatePresence mode="wait">
             {state.toast ? (
@@ -24,7 +45,7 @@ export default function BiblePage() {
                 exit={{ opacity: 0, y: -6 }}
                 className="sticky top-0 z-30 flex justify-center py-2"
               >
-                <span className="text-xs bg-gold text-white rounded-full px-3 py-1 shadow-sm">{state.toast}</span>
+                <span className="text-xs bg-gold text-white rounded-full px-3 py-1 shadow-sm font-medium">{state.toast}</span>
               </motion.div>
             ) : null}
           </AnimatePresence>
@@ -45,20 +66,26 @@ export default function BiblePage() {
                   exit={{ opacity: 0, x: -30 }}
                   transition={{ duration: 0.25, ease: "easeOut" }}
                 >
-                  {state.verses.map((verse, idx) => (
-                    <BibleVerseItem
-                      key={verse.reference}
-                      verse={verse}
-                      isActive={state.activeVerseId === verse.reference}
-                      verseTextClasses={state.verseTextClasses}
-                      index={idx}
-                      onToggleActive={(ref) =>
-                        state.setActiveVerseId(state.activeVerseId === ref ? null : ref)
-                      }
-                      onOpenNote={state.handleOpenNote}
-                      onCopy={state.handleCopy}
-                    />
-                  ))}
+                  {state.verses.map((verse, idx) => {
+                    const highlight = state.highlights.find(h => h.verse_start === verse.verse);
+                    const note = state.notes.find(n => n.verse_start === verse.verse);
+                    return (
+                      <BibleVerseItem
+                        key={verse.reference}
+                        verse={verse}
+                        isActive={state.selectedVerseIds.includes(verse.reference)}
+                        highlightColor={highlight?.color}
+                        hasNote={!!note}
+                        verseTextClasses={state.verseTextClasses}
+                        index={idx}
+                        onToggleActive={(ref) => {
+                          state.setSelectedVerseIds(prev => 
+                            prev.includes(ref) ? prev.filter(id => id !== ref) : [...prev, ref]
+                          );
+                        }}
+                      />
+                    );
+                  })}
                 </motion.div>
               </AnimatePresence>
             ) : (
@@ -68,44 +95,61 @@ export default function BiblePage() {
         </main>
       </div>
 
-      {state.isNavSheetOpen ? (
-        <BibleSettingsSheet
-          translation={state.translation}
-          books={state.books}
-          bookId={state.bookId}
-          chapters={state.chapters}
-          chapterId={state.chapterId}
-          selectedBook={state.selectedBook}
-          selectedChapter={state.selectedChapter}
-          fontSize={state.fontSize}
-          fontFamily={state.fontFamily}
-          lineSpacing={state.lineSpacing}
-          verseTextClasses={state.verseTextClasses}
-          onTranslationChange={state.handleTranslationChange}
-          onBookChange={state.handleBookChange}
-          onChapterChange={state.handleChapterChange}
-          onFontSizeChange={state.setFontSize}
-          onFontFamilyChange={state.setFontFamily}
-          onLineSpacingChange={state.setLineSpacing}
-          onClose={() => state.setIsNavSheetOpen(false)}
-        />
-      ) : null}
+      <AnimatePresence>
+        {state.selectedVerseIds.length > 0 && (
+          <BibleActionBar
+            selectedCount={state.selectedVerseIds.length}
+            activeColor={activeHighlightColor}
+            onNote={handleNoteAction}
+            onCopy={state.handleBulkCopy}
+            onHighlight={state.handleBulkHighlight}
+            onClear={() => state.setSelectedVerseIds([])}
+          />
+        )}
+      </AnimatePresence>
 
-      {state.isNotesOpen ? (
-        <BibleNotesModal
-          notes={state.notes}
-          activeVerseForNote={state.activeVerseForNote}
-          noteDraft={state.noteDraft}
-          onNoteDraftChange={state.setNoteDraft}
-          onSaveNote={state.handleSaveNote}
-          onCancelNote={() => {
-            state.setActiveVerseForNote(null);
-            state.setNoteDraft("");
-          }}
-          onDeleteNote={state.handleDeleteNote}
-          onClose={() => state.setIsNotesOpen(false)}
-        />
-      ) : null}
+      <AnimatePresence>
+        {state.isNavSheetOpen && (
+          <BibleSettingsSheet
+            translation={state.translation}
+            books={state.books}
+            bookId={state.bookId}
+            chapters={state.chapters}
+            chapterId={state.chapterId}
+            selectedBook={state.selectedBook}
+            selectedChapter={state.selectedChapter}
+            fontSize={state.fontSize}
+            fontFamily={state.fontFamily}
+            lineSpacing={state.lineSpacing}
+            verseTextClasses={state.verseTextClasses}
+            onTranslationChange={state.handleTranslationChange}
+            onBookChange={state.handleBookChange}
+            onChapterChange={state.handleChapterChange}
+            onFontSizeChange={state.setFontSize}
+            onFontFamilyChange={state.setFontFamily}
+            onLineSpacingChange={state.setLineSpacing}
+            onClose={() => state.setIsNavSheetOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {state.isNotesOpen && (
+          <BibleNotesModal
+            notes={state.notes}
+            activeVerseForNote={state.activeVerseForNote}
+            noteDraft={state.noteDraft}
+            onNoteDraftChange={state.setNoteDraft}
+            onSaveNote={state.handleSaveNote}
+            onCancelNote={() => {
+              state.setActiveVerseForNote(null);
+              state.setNoteDraft("");
+            }}
+            onDeleteNote={state.handleDeleteNote}
+            onClose={() => state.setIsNotesOpen(false)}
+          />
+        )}
+      </AnimatePresence>
     </PageTransition>
   );
 }

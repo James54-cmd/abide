@@ -14,6 +14,8 @@ import type {
   BibleBook,
   BibleChapter,
   BibleVerse,
+  BibleHighlight,
+  BibleNote,
   Note,
   BibleProgress,
 } from "@/features/bible/types";
@@ -42,9 +44,11 @@ export function useBibleState() {
   const [lineSpacing, setLineSpacing] = useState<LineSpacing>("normal");
   const [isNavSheetOpen, setIsNavSheetOpen] = useState(false);
   const [isNotesOpen, setIsNotesOpen] = useState(false);
-  const [notes, setNotes] = useState<Note[]>([]);
+  const [notes, setNotes] = useState<BibleNote[]>([]);
+  const [highlights, setHighlights] = useState<BibleHighlight[]>([]);
   const [activeVerseForNote, setActiveVerseForNote] = useState<string | null>(null);
-  const [activeVerseId, setActiveVerseId] = useState<string | null>(null);
+  const [activeVerseNumForNote, setActiveVerseNumForNote] = useState<number | null>(null);
+  const [selectedVerseIds, setSelectedVerseIds] = useState<string[]>([]);
   const [noteDraft, setNoteDraft] = useState("");
   const [toast, setToast] = useState<string | null>(null);
   const [isBootstrapped, setIsBootstrapped] = useState(false);
@@ -99,13 +103,40 @@ export function useBibleState() {
               : payload.progress?.verse ?? null;
           if (typeof verseNum === "number" && Number.isFinite(verseNum)) {
             const matched = payload.verses.find((v) => v.verse === verseNum);
-            setActiveVerseId(matched?.reference ?? null);
+            setSelectedVerseIds(matched ? [matched.reference] : []);
           } else {
-            setActiveVerseId(null);
+            setSelectedVerseIds([]);
           }
         } else {
-          setActiveVerseId(null);
+          setSelectedVerseIds([]);
         }
+
+        // Fetch highlights and notes from Supabase for this chapter
+        void (async () => {
+          const supabase = getSupabaseBrowserClient();
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) return;
+
+          const [hRes, nRes] = await Promise.all([
+            supabase
+              .from("bible_highlights" as any)
+              .select("*")
+              .eq("user_id", user.id)
+              .eq("translation", payload.translation)
+              .eq("book_id", payload.selectedBookId)
+              .eq("chapter_id", payload.selectedChapterId),
+            supabase
+              .from("bible_notes" as any)
+              .select("*")
+              .eq("user_id", user.id)
+              .eq("translation", payload.translation)
+              .eq("book_id", payload.selectedBookId)
+              .eq("chapter_id", payload.selectedChapterId)
+          ]);
+
+          if (hRes.data) setHighlights(hRes.data as unknown as BibleHighlight[]);
+          if (nRes.data) setNotes(nRes.data as unknown as BibleNote[]);
+        })();
       } catch (err) {
         if (args.signal?.aborted) return;
         setError(err instanceof Error ? err.message : "Unknown error.");
@@ -168,10 +199,6 @@ export function useBibleState() {
       if (prefs.fontFamily && ["serif", "sans"].includes(prefs.fontFamily)) setFontFamily(prefs.fontFamily as FontFamily);
       if (prefs.lineSpacing && ["tight", "normal", "relaxed", "loose"].includes(prefs.lineSpacing)) setLineSpacing(prefs.lineSpacing as LineSpacing);
     } catch {}
-    try {
-      const raw = window.localStorage.getItem("abide_bible_notes");
-      if (raw) setNotes(JSON.parse(raw) as Note[]);
-    } catch {}
   }, []);
 
   // Persist preferences
@@ -179,16 +206,12 @@ export function useBibleState() {
     window.localStorage.setItem("abide_bible_prefs", JSON.stringify({ fontSize, fontFamily, lineSpacing }));
   }, [fontSize, fontFamily, lineSpacing]);
 
-  // Persist notes
-  useEffect(() => {
-    window.localStorage.setItem("abide_bible_notes", JSON.stringify(notes));
-  }, [notes]);
-
   // Save progress (local + server)
   useEffect(() => {
     if (!isBootstrapped || !bookId || !chapterId) return;
+    const lastSelectedId = selectedVerseIds[selectedVerseIds.length - 1];
     const activeVerseNumber =
-      verses.find((verse) => verse.reference === activeVerseId)?.verse ?? 1;
+      verses.find((verse) => verse.reference === lastSelectedId)?.verse ?? 1;
     const progress: BibleProgress = {
       translation,
       bookId,
@@ -211,7 +234,7 @@ export function useBibleState() {
         lastServerSavedProgressKey = null;
       }
     })();
-  }, [isBootstrapped, translation, bookId, chapterId, verses, activeVerseId, getAccessToken]);
+  }, [isBootstrapped, translation, bookId, chapterId, verses, selectedVerseIds, getAccessToken]);
 
   // Toast auto-dismiss
   useEffect(() => {
@@ -251,25 +274,150 @@ export function useBibleState() {
     }
   };
 
-  const handleOpenNote = (ref: string) => {
+  const handleOpenNote = (ref: string, verseNum: number) => {
     setActiveVerseForNote(ref);
-    setNoteDraft("");
+    setActiveVerseNumForNote(verseNum);
+    const existingNote = notes.find(n => n.verse_start === verseNum);
+    setNoteDraft(existingNote?.content ?? "");
     setIsNotesOpen(true);
   };
 
-  const handleSaveNote = () => {
-    if (!activeVerseForNote || !noteDraft.trim()) return;
-    setNotes((prev) => [
-      { id: `note-${Date.now()}`, verseReference: activeVerseForNote, content: noteDraft.trim(), timestamp: new Date().toISOString() },
-      ...prev,
-    ]);
+  const handleSaveNote = async () => {
+    if (!activeVerseForNote || activeVerseNumForNote === null || !noteDraft.trim()) return;
+    
+    const supabase = getSupabaseBrowserClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const noteData = {
+      user_id: user.id,
+      translation,
+      book_id: bookId,
+      chapter_id: chapterId,
+      verse_start: activeVerseNumForNote,
+      verse_end: activeVerseNumForNote,
+      content: noteDraft.trim(),
+    };
+
+    const existingNote = notes.find(n => n.verse_start === activeVerseNumForNote);
+
+    if (existingNote) {
+      const { data, error } = await supabase
+        .from("bible_notes" as any)
+        .update({ content: noteDraft.trim(), updated_at: new Date().toISOString() } as any)
+        .eq("id", existingNote.id)
+        .select()
+        .single();
+      
+      if (!error && data) {
+        setNotes(prev => prev.map(n => n.id === (data as any).id ? (data as unknown as BibleNote) : n));
+      }
+    } else {
+      const { data, error } = await supabase
+        .from("bible_notes" as any)
+        .insert([noteData] as any)
+        .select()
+        .single();
+      
+      if (!error && data) {
+        setNotes(prev => [(data as unknown as BibleNote), ...prev]);
+      }
+    }
+
     setNoteDraft("");
     setActiveVerseForNote(null);
+    setActiveVerseNumForNote(null);
     setToast("Note saved");
   };
 
-  const handleDeleteNote = (noteId: string) => {
-    setNotes((prev) => prev.filter((n) => n.id !== noteId));
+  const handleDeleteNote = async (noteId: string) => {
+    const supabase = getSupabaseBrowserClient();
+    const { error } = await supabase
+      .from("bible_notes" as any)
+      .delete()
+      .eq("id", noteId);
+    
+    if (!error) {
+      setNotes((prev) => prev.filter((n) => n.id !== noteId));
+      setToast("Note deleted");
+    }
+  };
+
+  const handleBulkHighlight = async (color: string) => {
+    if (selectedVerseIds.length === 0) return;
+    
+    const supabase = getSupabaseBrowserClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const selectedVersesData = verses.filter(v => selectedVerseIds.includes(v.reference));
+    const selectedNums = selectedVersesData.map(v => v.verse);
+    
+    const allMatching = selectedNums.every(num => {
+      const h = highlights.find(h => h.verse_start === num);
+      return h && h.color === color;
+    });
+
+    if (allMatching) {
+      const idsToRemove = highlights
+        .filter(h => selectedNums.includes(h.verse_start))
+        .map(h => h.id);
+      
+      const { error } = await supabase.from("bible_highlights" as any).delete().in("id", idsToRemove);
+      if (!error) {
+        setHighlights(prev => prev.filter(h => !idsToRemove.includes(h.id)));
+        setToast("Highlights removed");
+      }
+    } else {
+      // Clear existing for these verses first
+      const idsToClear = highlights
+        .filter(h => selectedNums.includes(h.verse_start))
+        .map(h => h.id);
+      
+      if (idsToClear.length > 0) {
+        await supabase.from("bible_highlights" as any).delete().in("id", idsToClear);
+      }
+
+      const inserts = selectedVersesData.map(v => ({
+        user_id: user.id,
+        translation,
+        book_id: bookId,
+        chapter_id: chapterId,
+        verse_start: v.verse,
+        verse_end: v.verse,
+        color
+      }));
+
+      const { data, error } = await supabase
+        .from("bible_highlights" as any)
+        .insert(inserts as any)
+        .select();
+      
+      if (!error && data) {
+        setHighlights(prev => {
+          const others = prev.filter(h => !selectedNums.includes(h.verse_start));
+          return [...others, ...(data as unknown as BibleHighlight[])];
+        });
+        setToast(`Highlighted ${selectedVerseIds.length} verses`);
+      }
+    }
+  };
+
+  const handleBulkCopy = async () => {
+    if (selectedVerseIds.length === 0) return;
+    const selectedVersesData = verses
+      .filter(v => selectedVerseIds.includes(v.reference))
+      .sort((a, b) => a.verse - b.verse);
+    
+    const text = selectedVersesData.map(v => `${v.verse} ${v.text}`).join('\n');
+    const label = `${chapterLabel}:${selectedVersesData[0].verse}${selectedVersesData.length > 1 ? `-${selectedVersesData[selectedVersesData.length-1].verse}` : ''}`;
+    
+    try {
+      await navigator.clipboard.writeText(`${label}\n${text}`);
+      setToast("Copied to clipboard");
+    } catch {
+      setToast("Copy failed");
+    }
   };
 
   const verseTextClasses = cn(
@@ -378,10 +526,13 @@ export function useBibleState() {
     isNavSheetOpen,
     isNotesOpen,
     notes,
+    highlights,
     activeVerseForNote,
-    activeVerseId,
+    selectedVerseIds,
     noteDraft,
     toast,
+    activeVerseNumForNote,
+    isBootstrapped,
 
     // Setters
     setFontSize,
@@ -389,9 +540,10 @@ export function useBibleState() {
     setLineSpacing,
     setIsNavSheetOpen,
     setIsNotesOpen,
-    setActiveVerseId,
+    setSelectedVerseIds,
     setNoteDraft,
     setActiveVerseForNote,
+    setActiveVerseNumForNote,
 
     // Handlers
     handlePrev,
@@ -400,6 +552,8 @@ export function useBibleState() {
     handleOpenNote,
     handleSaveNote,
     handleDeleteNote,
+    handleBulkHighlight,
+    handleBulkCopy,
     handleTranslationChange,
     handleBookChange,
     handleChapterChange,

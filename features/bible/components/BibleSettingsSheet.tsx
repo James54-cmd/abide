@@ -59,7 +59,7 @@ export default function BibleSettingsSheet({
   onClose,
 }: BibleSettingsSheetProps) {
   return (
-    <div className="fixed inset-0 z-[70]" onClick={onClose}>
+    <div className="fixed inset-0 z-[100]" onClick={onClose}>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/30" />
       <motion.div
         initial={{ y: "100%" }}

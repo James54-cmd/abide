@@ -6,12 +6,40 @@ export type LineSpacing = "tight" | "normal" | "relaxed" | "loose";
 export type BibleBook = { id: string; name: string };
 export type BibleChapter = { id: string; number: number };
 export type BibleVerse = { reference: string; text: string; verse: number };
+export type BibleHighlight = {
+  id: string;
+  user_id: string;
+  translation: Translation;
+  book_id: string;
+  chapter_id: string;
+  verse_start: number;
+  verse_end: number;
+  color: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BibleNote = {
+  id: string;
+  user_id: string;
+  translation: Translation;
+  book_id: string;
+  chapter_id: string;
+  verse_start: number;
+  verse_end: number;
+  content: string;
+  created_at: string;
+  updated_at: string;
+};
+
+// Deprecated Note type for backward compatibility if needed, but we'll use BibleNote
 export type Note = {
   id: string;
   verseReference: string;
   content: string;
   timestamp: string;
 };
+
 export type BibleProgress = {
   translation: Translation;
   bookId: string;
