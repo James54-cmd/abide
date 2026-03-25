@@ -5,7 +5,7 @@ import { MessageSquare, Copy, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface BibleActionBarProps {
-  selectedCount: number;
+  selectionLabel: string;
   activeColor?: string | null;
   onNote: () => void;
   onCopy: () => void;
@@ -22,7 +22,7 @@ const COLORS = [
 ];
 
 export default function BibleActionBar({
-  selectedCount,
+  selectionLabel,
   activeColor,
   onNote,
   onCopy,
@@ -35,20 +35,26 @@ export default function BibleActionBar({
         initial={{ y: 100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: 100, opacity: 0 }}
-        className="w-full max-w-[400px] pointer-events-auto"
+        className="w-full max-w-[400px] pointer-events-auto flex flex-col items-center gap-3"
       >
-        <div className="bg-white/80 dark:bg-dark-card/80 backdrop-blur-xl border border-gold/20 rounded-2xl shadow-2xl px-4 py-3 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-1.5 border-r border-gold/10 pr-3">
-            <button
-              onClick={onClear}
-              className="p-1 rounded-full hover:bg-gold/10 text-muted transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-            <span className="text-xs font-bold text-gold tabular-nums">{selectedCount}</span>
-          </div>
+        <motion.div 
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.1 }}
+          className="bg-ink/90 dark:bg-parchment/90 backdrop-blur-md text-parchment dark:text-ink px-4 py-1.5 rounded-full text-xs font-medium shadow-md max-w-[90%] truncate tracking-wide"
+        >
+          {selectionLabel}
+        </motion.div>
 
-          <div className="flex items-center justify-center gap-3 flex-1">
+        <div className="w-full bg-white/80 dark:bg-dark-card/80 backdrop-blur-xl border border-gold/20 rounded-2xl shadow-2xl px-4 py-3.5 flex items-center justify-between">
+          <button
+            onClick={onClear}
+            className="p-1.5 -ml-1 rounded-full hover:bg-gold/10 text-muted transition-colors"
+          >
+            <X className="w-[18px] h-[18px]" />
+          </button>
+
+          <div className="flex items-center justify-center gap-3 px-2">
             {COLORS.map((color) => (
               <button
                 key={color.name}
@@ -64,17 +70,17 @@ export default function BibleActionBar({
             ))}
           </div>
 
-          <div className="flex items-center gap-1 pl-3 border-l border-gold/10">
+          <div className="flex items-center gap-1">
             <button
               onClick={onNote}
-              className="p-2 rounded-xl hover:bg-gold/10 text-muted hover:text-gold transition-colors"
+              className="p-1.5 rounded-xl hover:bg-gold/10 text-muted hover:text-gold transition-colors"
               title="Add Note"
             >
               <MessageSquare className="w-5 h-5" />
             </button>
             <button
               onClick={onCopy}
-              className="p-2 rounded-xl hover:bg-gold/10 text-muted hover:text-gold transition-colors"
+              className="p-1.5 -mr-1 rounded-xl hover:bg-gold/10 text-muted hover:text-gold transition-colors"
               title="Copy Selection"
             >
               <Copy className="w-5 h-5" />

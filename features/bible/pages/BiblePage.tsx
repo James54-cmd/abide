@@ -32,6 +32,34 @@ export default function BiblePage() {
     return firstColor;
   })();
 
+  const selectedCitation = (() => {
+    if (state.selectedVerseIds.length === 0) return "";
+    const nums = state.selectedVerseIds
+      .map(ref => state.verses.find(v => v.reference === ref)?.verse)
+      .filter((v): v is number => v !== undefined);
+    
+    if (nums.length === 0) return "";
+    
+    nums.sort((a, b) => a - b);
+    let result = [];
+    let start = nums[0];
+    let end = nums[0];
+
+    for (let i = 1; i < nums.length; i++) {
+      if (nums[i] === end + 1) {
+        end = nums[i];
+      } else {
+        result.push(start === end ? `${start}` : `${start}-${end}`);
+        start = nums[i];
+        end = nums[i];
+      }
+    }
+    result.push(start === end ? `${start}` : `${start}-${end}`);
+    
+    const chapterLabel = `${state.selectedBook?.name ?? "Bible"} ${state.selectedChapter?.number ?? ""}`;
+    return `${chapterLabel}:${result.join(", ")} ${state.translation}`;
+  })();
+
   return (
     <PageTransition>
       <div className="bg-parchment dark:bg-dark-bg min-h-screen pb-20">
@@ -84,7 +112,7 @@ export default function BiblePage() {
       <AnimatePresence>
         {state.selectedVerseIds.length > 0 && (
           <BibleActionBar
-            selectedCount={state.selectedVerseIds.length}
+            selectionLabel={selectedCitation}
             activeColor={activeHighlightColor}
             onNote={handleNoteAction}
             onCopy={state.handleBulkCopy}
