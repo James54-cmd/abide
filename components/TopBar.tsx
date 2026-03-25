@@ -70,7 +70,7 @@ export default function TopBar() {
 
   const handleLogout = async () => {
     const supabase = getSupabaseBrowserClient();
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: "local" });
     router.replace("/login");
     router.refresh();
   };
