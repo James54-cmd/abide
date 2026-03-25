@@ -1,15 +1,17 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { MessageSquare, Copy, X } from "lucide-react";
+import { MessageSquare, Copy, X, Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface BibleActionBarProps {
   selectionLabel: string;
   activeColor?: string | null;
+  isFavorited?: boolean;
   onNote: () => void;
   onCopy: () => void;
   onHighlight: (color: string) => void;
+  onFavorite: () => void;
   onClear: () => void;
 }
 
@@ -24,9 +26,11 @@ const COLORS = [
 export default function BibleActionBar({
   selectionLabel,
   activeColor,
+  isFavorited,
   onNote,
   onCopy,
   onHighlight,
+  onFavorite,
   onClear,
 }: BibleActionBarProps) {
   return (
@@ -71,6 +75,21 @@ export default function BibleActionBar({
           </div>
 
           <div className="flex items-center gap-1">
+            <button
+              onClick={onFavorite}
+              className={cn(
+                "p-1.5 rounded-xl transition-all active:scale-75",
+                isFavorited ? "text-red-500" : "text-muted hover:text-red-500"
+              )}
+              title={isFavorited ? "Remove from Favorites" : "Add to Favorites"}
+            >
+              <motion.div
+                animate={isFavorited ? { scale: [1, 1.3, 1] } : {}}
+                transition={{ duration: 0.3 }}
+              >
+                <Heart className={cn("w-5 h-5", isFavorited && "fill-current")} />
+              </motion.div>
+            </button>
             <button
               onClick={onNote}
               className="p-1.5 rounded-xl hover:bg-gold/10 text-muted hover:text-gold transition-colors"

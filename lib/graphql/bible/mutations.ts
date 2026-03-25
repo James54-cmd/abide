@@ -101,3 +101,49 @@ export const BULK_DELETE_BIBLE_HIGHLIGHTS_MUTATION = gql`
     bulkDeleteBibleHighlights(ids: $ids)
   }
 `;
+
+export const SAVE_BIBLE_FAVORITE_MUTATION = gql`
+  mutation SaveBibleFavorite($input: SaveBibleFavoriteInput!) {
+    saveBibleFavorite(input: $input) {
+      id
+      translation
+      bookId
+      chapterId
+      verseStart
+      verseEnd
+      verseReference
+      verseText
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+export const DELETE_BIBLE_FAVORITE_MUTATION = gql`
+  mutation DeleteBibleFavorite($id: String!) {
+    deleteBibleFavorite(id: $id)
+  }
+`;
+
+export const BULK_SAVE_BIBLE_FAVORITES_MUTATION = gql`
+  mutation BulkSaveBibleFavorites($inputs: [SaveBibleFavoriteInput!]!) {
+    bulkSaveBibleFavorites(inputs: $inputs) {
+      id
+      translation
+      bookId
+      chapterId
+      verseStart
+      verseEnd
+      verseReference
+      verseText
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+export const BULK_DELETE_BIBLE_FAVORITES_MUTATION = gql`
+  mutation BulkDeleteBibleFavorites($ids: [String!]!) {
+    bulkDeleteBibleFavorites(ids: $ids)
+  }
+`;

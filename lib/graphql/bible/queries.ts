@@ -40,3 +40,20 @@ export const BIBLE_BOOTSTRAP_QUERY = gql`
     }
   }
 `;
+
+export const BIBLE_FAVORITES_QUERY = gql`
+  query BibleFavorites {
+    bibleFavorites {
+      id
+      translation
+      bookId
+      chapterId
+      verseStart
+      verseEnd
+      verseReference
+      verseText
+      createdAt
+      updatedAt
+    }
+  }
+`;

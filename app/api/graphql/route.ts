@@ -140,7 +140,6 @@ const typeDefs = `
     createdAt: String!
     updatedAt: String!
   }
-
   type BibleNote {
     id: String!
     translation: String!
@@ -149,6 +148,19 @@ const typeDefs = `
     verseStart: Int!
     verseEnd: Int!
     content: String!
+    createdAt: String!
+    updatedAt: String!
+  }
+
+  type BibleFavorite {
+    id: String!
+    translation: String!
+    bookId: String!
+    chapterId: String!
+    verseStart: Int!
+    verseEnd: Int!
+    verseReference: String!
+    verseText: String!
     createdAt: String!
     updatedAt: String!
   }
@@ -230,6 +242,17 @@ const typeDefs = `
     color: String
   }
 
+  input SaveBibleFavoriteInput {
+    id: String
+    translation: String!
+    bookId: String!
+    chapterId: String!
+    verseStart: Int!
+    verseEnd: Int!
+    verseReference: String!
+    verseText: String!
+  }
+
   input SaveBibleNoteInput {
     id: String
     translation: String!
@@ -252,6 +275,12 @@ const typeDefs = `
     saveBibleNote(input: SaveBibleNoteInput!): BibleNote!
     bulkSaveBibleNotes(inputs: [SaveBibleNoteInput!]!): [BibleNote!]!
     bulkDeleteBibleNotes(ids: [String!]!): Boolean!
+    
+    saveBibleFavorite(input: SaveBibleFavoriteInput!): BibleFavorite!
+    deleteBibleFavorite(id: String!): Boolean!
+    bulkSaveBibleFavorites(inputs: [SaveBibleFavoriteInput!]!): [BibleFavorite!]!
+    bulkDeleteBibleFavorites(ids: [String!]!): Boolean!
+
     deleteChatConversation(id: String!): Boolean!
     generateEncouragement(input: GenerateEncouragementInput!): GenerateEncouragementPayload!
     resendVerification(email: String!): Boolean!
@@ -274,6 +303,7 @@ const typeDefs = `
       conversationId: String
       includeMessages: Boolean
     ): ChatBootstrapPayload!
+    bibleFavorites: [BibleFavorite!]!
   }
 `;
 
@@ -562,6 +592,27 @@ const resolvers = {
         messages,
         activeConversationId,
       };
+    },
+    bibleFavorites: async (_: unknown, __: unknown, context: GraphQlContext) => {
+      const { user, supabase } = await requireUserFromAuthHeader(context.authHeader);
+      const { data, error } = await supabase
+        .from("bible_favorites")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data.map(item => ({
+        id: item.id,
+        translation: item.translation,
+        bookId: item.book_id,
+        chapterId: item.chapter_id,
+        verseStart: item.verse_start,
+        verseEnd: item.verse_end,
+        verseReference: item.verse_reference,
+        verseText: item.verse_text,
+        createdAt: item.created_at,
+        updatedAt: item.updated_at,
+      }));
     },
   },
   Mutation: {
@@ -1049,6 +1100,91 @@ const resolvers = {
         conversationId: result.conversationId,
         encouragement: result.encouragement,
       };
+    },
+    saveBibleFavorite: async (
+      _: unknown,
+      args: { input: any },
+      context: GraphQlContext
+    ) => {
+      const { user, supabase } = await requireUserFromAuthHeader(context.authHeader);
+      const payload = {
+        user_id: user.id,
+        translation: args.input.translation.toUpperCase(),
+        book_id: args.input.bookId,
+        chapter_id: args.input.chapterId,
+        verse_start: args.input.verseStart,
+        verse_end: args.input.verseEnd,
+        verse_reference: args.input.verseReference,
+        verse_text: args.input.verseText,
+      };
+      const { data, error } = await supabase
+        .from("bible_favorites")
+        .upsert(payload, { onConflict: "id" })
+        .select("*")
+        .single();
+      if (error) throw error;
+      return {
+        id: data.id,
+        translation: data.translation,
+        bookId: data.book_id,
+        chapterId: data.chapter_id,
+        verseStart: data.verse_start,
+        verseEnd: data.verse_end,
+        verseReference: data.verse_reference,
+        verseText: data.verse_text,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at,
+      };
+    },
+    deleteBibleFavorite: async (_: unknown, args: { id: string }, context: GraphQlContext) => {
+      const { user, supabase } = await requireUserFromAuthHeader(context.authHeader);
+      const { error } = await supabase
+        .from("bible_favorites")
+        .delete()
+        .eq("id", args.id)
+        .eq("user_id", user.id);
+      if (error) throw error;
+      return true;
+    },
+    bulkSaveBibleFavorites: async (_: unknown, args: { inputs: any[] }, context: GraphQlContext) => {
+      const { user, supabase } = await requireUserFromAuthHeader(context.authHeader);
+      const inserts = args.inputs.map(input => ({
+        user_id: user.id,
+        translation: input.translation.toUpperCase(),
+        book_id: input.bookId,
+        chapter_id: input.chapterId,
+        verse_start: input.verseStart,
+        verse_end: input.verseEnd,
+        verse_reference: input.verseReference,
+        verse_text: input.verseText,
+      }));
+      const { data, error } = await supabase
+        .from("bible_favorites")
+        .insert(inserts)
+        .select("*");
+      if (error) throw error;
+      return data.map(item => ({
+        id: item.id,
+        translation: item.translation,
+        bookId: item.book_id,
+        chapterId: item.chapter_id,
+        verseStart: item.verse_start,
+        verseEnd: item.verse_end,
+        verseReference: item.verse_reference,
+        verseText: item.verse_text,
+        createdAt: item.created_at,
+        updatedAt: item.updated_at,
+      }));
+    },
+    bulkDeleteBibleFavorites: async (_: unknown, args: { ids: string[] }, context: GraphQlContext) => {
+      const { user, supabase } = await requireUserFromAuthHeader(context.authHeader);
+      const { error } = await supabase
+        .from("bible_favorites")
+        .delete()
+        .in("id", args.ids)
+        .eq("user_id", user.id);
+      if (error) throw error;
+      return true;
     },
     resendVerification: async (_: unknown, args: { email: string }) => {
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;

@@ -35,6 +35,12 @@ export default function BiblePage() {
     state.translation
   );
 
+  const isSelectionFavorited = state.selectedVerseIds.length > 0 && 
+    state.selectedVerseIds.every(id => {
+      const vNum = state.verses.find(v => v.reference === id)?.verse;
+      return state.favorites.some(f => f.verse_start === vNum);
+    });
+
   useEffect(() => {
     if (state.selectedVerseIds.length === 1 && !state.isLoading) {
       const ref = state.selectedVerseIds[0];
@@ -107,9 +113,11 @@ export default function BiblePage() {
           <BibleActionBar
             selectionLabel={selectedCitation}
             activeColor={activeHighlightColor}
+            isFavorited={isSelectionFavorited}
             onNote={handleNoteAction}
             onCopy={state.handleBulkCopy}
             onHighlight={state.handleBulkHighlight}
+            onFavorite={state.handleBulkFavorite}
             onClear={() => state.setSelectedVerseIds([])}
           />
         )}

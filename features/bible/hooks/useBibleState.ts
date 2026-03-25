@@ -8,9 +8,12 @@ import {
   saveBibleNote,
   deleteBibleNote,
   saveBibleHighlight,
-  deleteBibleHighlight,
   bulkSaveBibleHighlights,
   bulkDeleteBibleHighlights,
+  saveBibleFavorite,
+  deleteBibleFavorite,
+  bulkSaveBibleFavorites,
+  bulkDeleteBibleFavorites,
 } from "@/lib/graphql/bible/hooks";
 import { toast } from "sonner";
 import type {
@@ -22,6 +25,7 @@ import type {
   BibleChapter,
   BibleVerse,
   BibleHighlight,
+  BibleFavorite,
   BibleNote,
   Note,
   BibleProgress,
@@ -53,6 +57,7 @@ export function useBibleState() {
   const [isNotesOpen, setIsNotesOpen] = useState(false);
   const [notes, setNotes] = useState<BibleNote[]>([]);
   const [highlights, setHighlights] = useState<BibleHighlight[]>([]);
+  const [favorites, setFavorites] = useState<BibleFavorite[]>([]);
   const [activeVerseForNote, setActiveVerseForNote] = useState<string | null>(null);
   const [activeVerseNumForNote, setActiveVerseNumForNote] = useState<number | null>(null);
   const [activeVerseNumEndForNote, setActiveVerseNumEndForNote] = useState<number | null>(null);
@@ -136,7 +141,7 @@ export function useBibleState() {
           const { data: { user } } = await supabase.auth.getUser();
           if (!user) return;
 
-          const [hRes, nRes] = await Promise.all([
+          const [hRes, nRes, fRes] = await Promise.all([
             supabase
               .from("bible_highlights" as any)
               .select("*")
@@ -150,11 +155,19 @@ export function useBibleState() {
               .eq("user_id", user.id)
               .eq("translation", payload.translation)
               .eq("book_id", payload.selectedBookId)
+              .eq("chapter_id", payload.selectedChapterId),
+            supabase
+              .from("bible_favorites" as any)
+              .select("*")
+              .eq("user_id", user.id)
+              .eq("translation", payload.translation)
+              .eq("book_id", payload.selectedBookId)
               .eq("chapter_id", payload.selectedChapterId)
           ]);
 
           if (hRes.data) setHighlights(hRes.data as unknown as BibleHighlight[]);
           if (nRes.data) setNotes(nRes.data as unknown as BibleNote[]);
+          if (fRes.data) setFavorites(fRes.data as unknown as BibleFavorite[]);
         })();
       } catch (err) {
         if (args.signal?.aborted) return;
@@ -483,6 +496,51 @@ export function useBibleState() {
     }
   };
 
+  const handleBulkFavorite = async () => {
+    if (selectedVerseIds.length === 0) return;
+    
+    const token = await getAccessToken();
+    if (!token) return;
+
+    const selectedVersesData = verses.filter(v => selectedVerseIds.includes(v.reference));
+    const selectedNums = selectedVersesData.map(v => v.verse);
+    
+    const allFavorited = selectedNums.every(num => 
+      favorites.some(f => f.verse_start === num)
+    );
+
+    if (allFavorited) {
+      const favoritesToRemove = favorites.filter(f => selectedNums.includes(f.verse_start));
+      const idsToRemove = favoritesToRemove.map(f => f.id);
+      setFavorites(prev => prev.filter(f => !idsToRemove.includes(f.id)));
+      await bulkDeleteBibleFavorites(token, idsToRemove);
+      toast.success("Removed from favorites");
+    } else {
+      // Clear existing for these verses to avoid duplicates
+      const itemsToClear = favorites.filter(f => selectedNums.includes(f.verse_start));
+      if (itemsToClear.length > 0) {
+        await bulkDeleteBibleFavorites(token, itemsToClear.map(f => f.id));
+      }
+
+      const inputs = selectedVersesData.map(v => ({
+        translation,
+        bookId,
+        chapterId,
+        verseStart: v.verse,
+        verseEnd: v.verse,
+        verseReference: v.reference,
+        verseText: v.text,
+      }));
+
+      const newFavorites = await bulkSaveBibleFavorites(token, inputs);
+      setFavorites(prev => {
+        const others = prev.filter(f => !selectedNums.includes(f.verse_start));
+        return [...others, ...newFavorites];
+      });
+      toast.success("Added to favorites");
+    }
+  };
+
   const handleBulkCopy = async () => {
     if (selectedVerseIds.length === 0) return;
     const selectedVersesData = verses
@@ -607,6 +665,7 @@ export function useBibleState() {
     isNotesOpen,
     notes,
     highlights,
+    favorites,
     activeVerseForNote,
     selectedVerseIds,
     noteDraft,
@@ -637,6 +696,7 @@ export function useBibleState() {
     handleSaveNote,
     handleDeleteNote,
     handleBulkHighlight,
+    handleBulkFavorite,
     handleBulkCopy,
     handleTranslationChange,
     handleBookChange,

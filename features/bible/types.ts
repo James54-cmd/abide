@@ -32,6 +32,20 @@ export type BibleNote = {
   updated_at: string;
 };
 
+export type BibleFavorite = {
+  id: string;
+  user_id: string;
+  translation: Translation;
+  book_id: string;
+  chapter_id: string;
+  verse_start: number;
+  verse_end: number;
+  verse_reference: string;
+  verse_text: string;
+  created_at: string;
+  updated_at: string;
+};
+
 // Deprecated Note type for backward compatibility if needed, but we'll use BibleNote
 export type Note = {
   id: string;
