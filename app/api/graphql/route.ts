@@ -606,11 +606,25 @@ const resolvers = {
         console.error("Failed to send verification email:", err);
       }
 
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (signInError) {
+        return {
+          success: true,
+          message: "Account created. Please check your email to confirm your signup.",
+          accessToken: null,
+          refreshToken: null,
+        };
+      }
+
       return {
         success: true,
         message: "Account created. Please check your email to confirm your signup.",
-        accessToken: null,
-        refreshToken: null,
+        accessToken: signInData.session?.access_token ?? null,
+        refreshToken: signInData.session?.refresh_token ?? null,
       };
     },
     login: async (

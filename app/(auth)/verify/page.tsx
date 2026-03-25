@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import AuthShell from "@/components/auth/AuthShell";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { resendVerificationWithGraphql, loginWithGraphql } from "@/lib/graphql/auth";
-import { Mail, RefreshCw, LogOut } from "lucide-react";
+import { Mail, RefreshCw, LogOut, CheckCircle2 } from "lucide-react";
 
 export default function VerifyPage() {
   const router = useRouter();
@@ -13,9 +13,12 @@ export default function VerifyPage() {
   const [isResending, setIsResending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isVerifiedLocally, setIsVerifiedLocally] = useState(false);
 
   useEffect(() => {
     let pollInterval: NodeJS.Timeout;
+    const supabase = getSupabaseBrowserClient();
+    let channel: any;
 
     const checkUser = async () => {
       const searchParams = new URLSearchParams(window.location.search);
@@ -24,70 +27,87 @@ export default function VerifyPage() {
         setEmail(queryEmail);
       }
 
-      const supabase = getSupabaseBrowserClient();
       const { data: { user } } = await supabase.auth.getUser();
       
       if (user) {
-        // Even if logged in, check custom status
-        const { data: profile } = await supabase
+        // 1. Initial check
+        const { data: profile } = await (supabase
           .from("profiles")
           .select("verification_status")
           .eq("id", user.id)
-          .single() as any;
-
+          .single() as any);
+        
         if (profile?.verification_status === "verified") {
-          router.replace("/");
+          setIsVerifiedLocally(true);
+          setTimeout(() => router.replace("/"), 1000);
           return;
         }
         setEmail(user.email ?? null);
+
+        // 2. Setup Realtime Subscription
+        channel = supabase
+          .channel(`profile-updates-${user.id}`)
+          .on(
+            "postgres_changes",
+            {
+              event: "UPDATE",
+              schema: "public",
+              table: "profiles",
+              filter: `id=eq.${user.id}`,
+            },
+            (payload: any) => {
+              if (payload.new?.verification_status === "verified") {
+                setIsVerifiedLocally(true);
+                setTimeout(() => router.replace("/"), 1000);
+              }
+            }
+          )
+          .subscribe();
       } else if (!queryEmail) {
         router.replace("/login");
         return;
       }
 
-      // Start polling if not verified
       pollInterval = setInterval(async () => {
-        const currentEmail = queryEmail || user?.email;
+        const currentEmail = queryEmail || (await supabase.auth.getUser()).data.user?.email;
         if (!currentEmail) return;
 
-        // Check profile status from Supabase (bypassing cache)
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("verification_status")
-          .eq("email", currentEmail)
-          .single() as any;
-
-        if (profile?.verification_status === "verified") {
-          clearInterval(pollInterval);
+        try {
+          const res = await fetch(`/api/auth/verify-status?email=${encodeURIComponent(currentEmail)}`);
+          const data = await res.json();
           
-          // Auto-login if we have credentials
-          const storedPassword = sessionStorage.getItem("abide_pending_password");
-          if (storedPassword && currentEmail) {
-            try {
-              const result = await loginWithGraphql({ email: currentEmail, password: storedPassword });
-              if (result.accessToken && result.refreshToken) {
-                await supabase.auth.setSession({
-                  access_token: result.accessToken,
-                  refresh_token: result.refreshToken,
-                });
-                sessionStorage.removeItem("abide_pending_email");
-                sessionStorage.removeItem("abide_pending_password");
-                router.replace("/");
-              }
-            } catch (err) {
-              console.error("Auto-login failed:", err);
-              router.replace("/login?message=Verified! Please log in.");
+          if (data.status === "verified") {
+            clearInterval(pollInterval);
+            setIsVerifiedLocally(true);
+
+            const storedPassword = sessionStorage.getItem("abide_pending_password");
+            if (storedPassword && currentEmail) {
+                try {
+                  const result = await loginWithGraphql({ email: currentEmail, password: storedPassword });
+                  if (result.accessToken && result.refreshToken) {
+                    await supabase.auth.setSession({
+                      access_token: result.accessToken,
+                      refresh_token: result.refreshToken,
+                    });
+                    sessionStorage.removeItem("abide_pending_email");
+                    sessionStorage.removeItem("abide_pending_password");
+                  }
+                } catch (err) {
+                  // Ignore auto-login errors here to just proceed with redirect
+                }
             }
-          } else {
-            router.replace("/login?message=Verified! Please log in.");
+            setTimeout(() => router.replace("/"), 1000);
           }
+        } catch (err) {
+          // Ignore poll errors
         }
-      }, 3000);
+      }, 1500);
     };
 
     checkUser();
     return () => {
       if (pollInterval) clearInterval(pollInterval);
+      if (channel) supabase.removeChannel(channel);
     };
   }, [router]);
 
@@ -116,6 +136,24 @@ export default function VerifyPage() {
     await supabase.auth.signOut({ scope: "local" });
     router.replace("/login");
   };
+
+  if (isVerifiedLocally) {
+    return (
+      <AuthShell>
+        <div className="w-full space-y-6 text-center animate-in fade-in zoom-in duration-500">
+           <div className="w-20 h-20 rounded-full bg-green-500/10 flex items-center justify-center mx-auto mb-2">
+            <CheckCircle2 className="w-10 h-10 text-green-500" />
+          </div>
+          <h2 className="text-2xl font-serif font-semibold text-ink dark:text-parchment">
+            Account Verified!
+          </h2>
+          <p className="text-sm text-muted">
+            Redirecting you to the app...
+          </p>
+        </div>
+      </AuthShell>
+    );
+  }
 
   return (
     <AuthShell>
