@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Cross, Menu, MoreVertical, X } from "lucide-react";
+import { Cross, Menu, User, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
@@ -119,10 +119,10 @@ export default function TopBar() {
               type="button"
               variant="outline"
               size="icon"
-              className="h-9 w-9 rounded-full border-gold/15 flex-shrink-0"
-              aria-label="Open menu"
+              className="h-9 w-9 rounded-full border-gold/15 flex-shrink-0 bg-gold/5"
+              aria-label="User menu"
             >
-              <MoreVertical className="h-4 w-4 text-ink dark:text-parchment" strokeWidth={1.5} />
+              <User className="h-4 w-4 text-gold" strokeWidth={2} />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
