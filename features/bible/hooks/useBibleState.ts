@@ -111,6 +111,17 @@ export function useBibleState() {
           setSelectedVerseIds([]);
         }
 
+        // Apply appearance from server progress if available
+        if (payload.progress?.fontSize) {
+          setFontSize(payload.progress.fontSize as FontSize);
+        }
+        if (payload.progress?.fontFamily) {
+          setFontFamily(payload.progress.fontFamily as FontFamily);
+        }
+        if (payload.progress?.lineSpacing) {
+          setLineSpacing(payload.progress.lineSpacing as LineSpacing);
+        }
+
         // Fetch highlights and notes from Supabase for this chapter
         void (async () => {
           const supabase = getSupabaseBrowserClient();
@@ -217,11 +228,14 @@ export function useBibleState() {
       bookId,
       chapterId,
       verse: activeVerseNumber,
+      fontSize,
+      fontFamily,
+      lineSpacing,
     };
 
     window.localStorage.setItem("abide_bible_progress", JSON.stringify(progress));
 
-    const saveKey = `${progress.translation}|${progress.bookId}|${progress.chapterId}|${progress.verse}`;
+    const saveKey = `${progress.translation}|${progress.bookId}|${progress.chapterId}|${progress.verse}|${fontSize}|${fontFamily}|${lineSpacing}`;
     if (lastServerSavedProgressKey === saveKey) return;
     lastServerSavedProgressKey = saveKey;
 
@@ -234,7 +248,18 @@ export function useBibleState() {
         lastServerSavedProgressKey = null;
       }
     })();
-  }, [isBootstrapped, translation, bookId, chapterId, verses, selectedVerseIds, getAccessToken]);
+  }, [
+    isBootstrapped,
+    translation,
+    bookId,
+    chapterId,
+    verses,
+    selectedVerseIds,
+    fontSize,
+    fontFamily,
+    lineSpacing,
+    getAccessToken,
+  ]);
 
   // Chapter navigation — re-bootstrap with the new chapter
   const handlePrev = useCallback(() => {

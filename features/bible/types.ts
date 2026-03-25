@@ -45,6 +45,9 @@ export type BibleProgress = {
   bookId: string;
   chapterId: string;
   verse: number;
+  fontSize?: FontSize;
+  fontFamily?: FontFamily;
+  lineSpacing?: LineSpacing;
 };
 
 export const FONT_SIZE_CLASSES: Record<FontSize, string> = {

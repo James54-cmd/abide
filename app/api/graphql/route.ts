@@ -123,6 +123,9 @@ const typeDefs = `
     bookId: String!
     chapterId: String!
     verse: Int!
+    fontSize: String
+    fontFamily: String
+    lineSpacing: String
     updatedAt: String
   }
 
@@ -212,6 +215,9 @@ const typeDefs = `
     bookId: String!
     chapterId: String!
     verse: Int
+    fontSize: String
+    fontFamily: String
+    lineSpacing: String
   }
 
   input SaveBibleHighlightInput {
@@ -290,6 +296,9 @@ const resolvers = {
         bookId: string;
         chapterId: string;
         verse: number;
+        fontSize?: string | null;
+        fontFamily?: string | null;
+        lineSpacing?: string | null;
         updatedAt?: string | null;
       } | null = null;
 
@@ -297,7 +306,7 @@ const resolvers = {
         const { user, supabase } = await requireUserFromAuthHeader(context.authHeader);
         const { data, error } = await supabase
           .from("bible_reading_progress")
-          .select("translation,book_id,chapter_id,verse,updated_at")
+          .select("translation,book_id,chapter_id,verse,font_size,font_family,line_spacing,updated_at")
           .eq("user_id", user.id)
           .single();
 
@@ -311,6 +320,9 @@ const resolvers = {
             bookId: data.book_id,
             chapterId: data.chapter_id,
             verse: data.verse,
+            fontSize: data.font_size,
+            fontFamily: data.font_family,
+            lineSpacing: data.line_spacing,
             updatedAt: data.updated_at,
           };
         }
@@ -411,6 +423,9 @@ const resolvers = {
               bookId: progress.bookId,
               chapterId: progress.chapterId,
               verse: progress.verse,
+              fontSize: progress.fontSize,
+              fontFamily: progress.fontFamily,
+              lineSpacing: progress.lineSpacing,
               updatedAt: progress.updatedAt ?? null,
             }
           : null,
@@ -665,6 +680,9 @@ const resolvers = {
           bookId: string;
           chapterId: string;
           verse?: number | null;
+          fontSize?: string | null;
+          fontFamily?: string | null;
+          lineSpacing?: string | null;
         };
       },
       context: GraphQlContext
@@ -697,10 +715,13 @@ const resolvers = {
             book_id: args.input.bookId.trim(),
             chapter_id: args.input.chapterId.trim(),
             verse,
+            font_size: args.input.fontSize || null,
+            font_family: args.input.fontFamily || null,
+            line_spacing: args.input.lineSpacing || null,
           },
           { onConflict: "user_id" }
         )
-        .select("translation,book_id,chapter_id,verse,updated_at")
+        .select("translation,book_id,chapter_id,verse,font_size,font_family,line_spacing,updated_at")
         .single();
 
       if (error) throw error;
@@ -709,6 +730,9 @@ const resolvers = {
         bookId: data.book_id,
         chapterId: data.chapter_id,
         verse: data.verse,
+        fontSize: data.font_size,
+        fontFamily: data.font_family,
+        lineSpacing: data.line_spacing,
         updatedAt: data.updated_at,
       };
     },

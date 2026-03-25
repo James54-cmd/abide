@@ -33,6 +33,9 @@ export const BIBLE_BOOTSTRAP_QUERY = gql`
         bookId
         chapterId
         verse
+        fontSize
+        fontFamily
+        lineSpacing
       }
     }
   }

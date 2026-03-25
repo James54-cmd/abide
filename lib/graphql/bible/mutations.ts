@@ -7,6 +7,9 @@ export const SAVE_BIBLE_PROGRESS_MUTATION = gql`
       bookId
       chapterId
       verse
+      fontSize
+      fontFamily
+      lineSpacing
     }
   }
 `;
