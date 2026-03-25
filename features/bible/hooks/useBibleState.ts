@@ -70,6 +70,16 @@ export function useBibleState() {
   const selectedChapter = useMemo(() => chapters.find((c) => c.id === chapterId) ?? null, [chapters, chapterId]);
   const chapterIndex = useMemo(() => chapters.findIndex((c) => c.id === chapterId), [chapters, chapterId]);
 
+  const bookIndex = useMemo(() => books.findIndex((b) => b.id === bookId), [books, bookId]);
+  const atLastChapter = useMemo(
+    () => chapters.length > 0 && chapterIndex === chapters.length - 1,
+    [chapters.length, chapterIndex]
+  );
+  const hasNextBook = useMemo(
+    () => bookIndex >= 0 && bookIndex < books.length - 1,
+    [bookIndex, books.length]
+  );
+
   const getAccessToken = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
     const { data, error } = await supabase.auth.getSession();
@@ -345,14 +355,41 @@ export function useBibleState() {
   }, [chapterIndex, chapters, translation, bookId, loadBibleBootstrap]);
 
   const handleNext = useCallback(() => {
-    if (chapterIndex < 0 || chapterIndex >= chapters.length - 1) return;
-    const nextId = chapters[chapterIndex + 1].id;
-    void loadBibleBootstrap({
-      translation,
-      preferredBookId: bookId,
-      preferredChapterId: nextId,
-    });
-  }, [chapterIndex, chapters, translation, bookId, loadBibleBootstrap]);
+    if (chapterIndex < 0 || chapters.length === 0) return;
+
+    // Normal case: next chapter within the same book.
+    if (chapterIndex < chapters.length - 1) {
+      const nextId = chapters[chapterIndex + 1].id;
+      void loadBibleBootstrap({
+        translation,
+        preferredBookId: bookId,
+        preferredChapterId: nextId,
+      });
+      return;
+    }
+
+    // At the last chapter of the current book: move to next book (unless we're already at Revelation).
+    if (atLastChapter && hasNextBook) {
+      const nextBookId = books[bookIndex + 1]?.id;
+      if (!nextBookId) return;
+
+      void loadBibleBootstrap({
+        translation,
+        preferredBookId: nextBookId,
+        preferredChapterId: null,
+      });
+    }
+  }, [
+    atLastChapter,
+    bookIndex,
+    books,
+    chapterIndex,
+    chapters,
+    hasNextBook,
+    translation,
+    bookId,
+    loadBibleBootstrap,
+  ]);
 
   // Verse actions
   const handleCopy = async (verse: BibleVerse) => {
@@ -582,11 +619,13 @@ export function useBibleState() {
         detail: {
           chapterLabel,
           canPrev: chapterIndex > 0,
-          canNext: chapterIndex >= 0 && chapterIndex < chapters.length - 1,
+          canNext:
+            (chapterIndex >= 0 && chapterIndex < chapters.length - 1) ||
+            (atLastChapter && hasNextBook),
         },
       })
     );
-  }, [chapterLabel, chapterIndex, chapters.length]);
+  }, [chapterLabel, chapterIndex, chapters.length, atLastChapter, hasNextBook]);
 
   // Event listeners for TopBar / BottomNav actions
   useEffect(() => {
