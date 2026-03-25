@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { BookOpen, Heart, Trash2 } from "lucide-react";
+import { Heart, Trash2 } from "lucide-react";
 import Link from "next/link";
 import PageTransition from "@/components/PageTransition";
 import EmptyState from "@/components/ui/EmptyState";
@@ -9,6 +9,21 @@ import { useFavoritesState } from "@/features/favorites/hooks/useFavoritesState"
 
 export default function FavoritesPage() {
   const { favorites, handleRemove, isLoading } = useFavoritesState();
+
+  const formatFavoriteReference = (fav: (typeof favorites)[number]) => {
+    if (!fav.book_name) return fav.verse_reference;
+    const bookName = fav.book_name;
+
+    const chapterRaw = String(fav.chapter_id ?? "");
+    const chapterPart = chapterRaw.includes(".") ? chapterRaw.split(".").pop() : chapterRaw;
+    const chapterNumber = chapterPart ? Number(chapterPart) : NaN;
+    if (!Number.isFinite(chapterNumber)) return fav.verse_reference;
+
+    const versePart =
+      fav.verse_end && fav.verse_end !== fav.verse_start ? `${fav.verse_start}-${fav.verse_end}` : String(fav.verse_start);
+
+    return `${bookName} ${chapterNumber}:${versePart}`;
+  };
 
   return (
     <PageTransition>
@@ -44,12 +59,12 @@ export default function FavoritesPage() {
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95, x: -100 }}
-                   transition={{ duration: 0.25 }}
+                  transition={{ duration: 0.25 }}
                   className="relative group bg-white dark:bg-dark-card rounded-2xl p-5 shadow-warm border border-gold/5 overflow-hidden"
                 >
                   <div className="absolute top-0 left-0 w-1 h-full bg-gold/20 group-hover:bg-gold transition-colors" />
                   
-                  <Link 
+                  <Link
                     href={`/bible?book=${fav.book_id}&chapter=${fav.chapter_id}&verse=${fav.verse_start}`}
                     className="block"
                   >
@@ -57,7 +72,7 @@ export default function FavoritesPage() {
                       &ldquo;{fav.verse_text}&rdquo;
                     </p>
                     <p className="mt-3 text-sm font-semibold text-gold uppercase tracking-wider">
-                      {fav.verse_reference}
+                      {formatFavoriteReference(fav)} ({fav.translation})
                     </p>
                   </Link>
 

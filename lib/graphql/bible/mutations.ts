@@ -108,6 +108,7 @@ export const SAVE_BIBLE_FAVORITE_MUTATION = gql`
       id
       translation
       bookId
+      bookName
       chapterId
       verseStart
       verseEnd
@@ -131,6 +132,7 @@ export const BULK_SAVE_BIBLE_FAVORITES_MUTATION = gql`
       id
       translation
       bookId
+      bookName
       chapterId
       verseStart
       verseEnd

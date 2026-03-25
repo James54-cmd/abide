@@ -37,6 +37,7 @@ export type BibleFavorite = {
   user_id: string;
   translation: Translation;
   book_id: string;
+  book_name: string;
   chapter_id: string;
   verse_start: number;
   verse_end: number;

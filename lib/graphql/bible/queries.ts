@@ -47,6 +47,7 @@ export const BIBLE_FAVORITES_QUERY = gql`
       id
       translation
       bookId
+      bookName
       chapterId
       verseStart
       verseEnd

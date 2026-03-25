@@ -156,6 +156,7 @@ const typeDefs = `
     id: String!
     translation: String!
     bookId: String!
+    bookName: String!
     chapterId: String!
     verseStart: Int!
     verseEnd: Int!
@@ -601,18 +602,46 @@ const resolvers = {
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data.map(item => ({
-        id: item.id,
-        translation: item.translation,
-        bookId: item.book_id,
-        chapterId: item.chapter_id,
-        verseStart: item.verse_start,
-        verseEnd: item.verse_end,
-        verseReference: item.verse_reference,
-        verseText: item.verse_text,
-        createdAt: item.created_at,
-        updatedAt: item.updated_at,
-      }));
+      const rows = data ?? [];
+      if (rows.length === 0) return [];
+
+      // Preload book names per translation so we can display full names in the UI.
+      const translations = Array.from(
+        new Set(rows.map((r) => (r.translation as Translation) || DEFAULT_TRANSLATION))
+      ).filter((t) => t === "NIV" || t === "NLT");
+
+      const booksByTranslation = new Map<Translation, Map<string, string>>();
+
+      await Promise.all(
+        translations.map(async (t) => {
+          const bibleId = getBibleIdForTranslation(t);
+          const booksData = await apiBibleGetCached(`/v1/bibles/${bibleId}/books`);
+          const books = mapBibleBooksData(booksData);
+          const map = new Map<string, string>();
+          for (const b of books) map.set(b.id.toUpperCase(), b.name);
+          booksByTranslation.set(t, map);
+        })
+      );
+
+      return rows.map((item) => {
+        const t = (item.translation as Translation) || DEFAULT_TRANSLATION;
+        const bookName =
+          booksByTranslation.get(t)?.get(String(item.book_id).toUpperCase()) ?? String(item.book_id);
+
+        return {
+          id: item.id,
+          translation: item.translation,
+          bookId: item.book_id,
+          bookName,
+          chapterId: item.chapter_id,
+          verseStart: item.verse_start,
+          verseEnd: item.verse_end,
+          verseReference: item.verse_reference,
+          verseText: item.verse_text,
+          createdAt: item.created_at,
+          updatedAt: item.updated_at,
+        };
+      });
     },
   },
   Mutation: {
