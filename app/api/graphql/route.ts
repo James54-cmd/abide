@@ -304,6 +304,7 @@ const typeDefs = `
     generateEncouragement(input: GenerateEncouragementInput!): GenerateEncouragementPayload!
     resendVerification(email: String!): Boolean!
     verifyEmail(token: String!): Boolean!
+    requestPasswordReset(email: String!): Boolean!
     updateMyProfile(input: UpdateMyProfileInput!): SettingsProfile!
     updateMyPassword(newPassword: String!): Boolean!
     sendPasswordResetEmail: Boolean!
@@ -1389,6 +1390,25 @@ const resolvers = {
         email_confirm: true
       });
 
+      return true;
+    },
+    requestPasswordReset: async (_: unknown, args: { email: string }) => {
+      const email = args.email?.trim().toLowerCase();
+      if (!email) return true;
+
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      if (!supabaseUrl || !supabaseAnonKey) {
+        throw new Error("Supabase env vars are missing.");
+      }
+
+      const supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+      const callbackBase = getSafeAuthRedirectUrl({
+        siteUrl: process.env.NEXT_PUBLIC_SITE_URL,
+      });
+      const redirectTo = callbackBase ? `${callbackBase}?next=/reset_password` : undefined;
+
+      await supabaseClient.auth.resetPasswordForEmail(email, redirectTo ? { redirectTo } : undefined);
       return true;
     },
     updateMyProfile: async (

@@ -5,9 +5,9 @@ import { uploadAvatarFile } from "@/lib/api/settings/requests";
 import {
   fetchMySettingsProfile,
   sendMyPasswordResetEmail,
-  updateMyPassword,
   updateMySettingsProfile,
 } from "@/lib/graphql/settings/hooks";
+import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { toast } from "sonner";
 import type { SettingsProfile } from "@/features/settings/types";
 
@@ -127,7 +127,9 @@ export function useSettingsState() {
     if (!canSavePassword) return;
     try {
       setIsSavingPassword(true);
-      await updateMyPassword(newPassword);
+      const supabase = getSupabaseBrowserClient();
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
 
       setNewPassword("");
       setConfirmPassword("");

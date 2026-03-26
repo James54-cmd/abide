@@ -3,7 +3,11 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import AuthShell from "@/components/auth/AuthShell";
-import { loginWithGraphql, signUpWithGraphql } from "@/lib/graphql/auth";
+import {
+  loginWithGraphql,
+  requestPasswordResetWithGraphql,
+  signUpWithGraphql,
+} from "@/lib/graphql/auth";
 import { getSafeAuthRedirectUrl } from "@/lib/auth/redirect";
 import { formatRetryMessage } from "@/lib/auth/verification";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
@@ -27,6 +31,7 @@ export default function LoginPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isResending, setIsResending] = useState(false);
+  const [isSendingReset, setIsSendingReset] = useState(false);
 
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
@@ -187,6 +192,26 @@ export default function LoginPage() {
     }
   };
 
+  const handleForgotPassword = async () => {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      setError("Enter your email first to reset password.");
+      return;
+    }
+
+    try {
+      setIsSendingReset(true);
+      setMessage(null);
+      setError(null);
+      await requestPasswordResetWithGraphql(normalizedEmail);
+      setMessage("If an account exists for this email, a reset link has been sent.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to send password reset email.");
+    } finally {
+      setIsSendingReset(false);
+    }
+  };
+
   return (
     <AuthShell>
       <div className="w-full space-y-3">
@@ -249,7 +274,7 @@ export default function LoginPage() {
 
         <button
           onClick={handleCredentialsSubmit}
-          disabled={isLoadingCredentials || isResending}
+          disabled={isLoadingCredentials || isResending || isSendingReset}
           className="w-full bg-gold text-white rounded-full py-3.5 text-sm font-semibold shadow-warm transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {isLoadingCredentials
@@ -264,10 +289,20 @@ export default function LoginPage() {
         {mode === "login" ? (
           <button
             onClick={handleResendFromLogin}
-            disabled={isLoadingCredentials || isResending || !email.trim()}
+            disabled={isLoadingCredentials || isResending || isSendingReset || !email.trim()}
             className="w-full border border-gold/20 text-gold rounded-full py-3.5 text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {isResending ? "Sending verification..." : "Resend verification email"}
+          </button>
+        ) : null}
+
+        {mode === "login" ? (
+          <button
+            onClick={handleForgotPassword}
+            disabled={isLoadingCredentials || isResending || isSendingReset || !email.trim()}
+            className="w-full border border-gold/20 text-gold rounded-full py-3.5 text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {isSendingReset ? "Sending reset link..." : "Forgot password"}
           </button>
         ) : null}
 
