@@ -107,6 +107,13 @@ const typeDefs = `
     refreshToken: String
   }
 
+  type SettingsProfile {
+    id: String!
+    email: String!
+    fullName: String
+    avatarUrl: String
+  }
+
   type BibleBook {
     id: String!
     name: String!
@@ -270,6 +277,11 @@ const typeDefs = `
     content: String!
   }
 
+  input UpdateMyProfileInput {
+    fullName: String
+    avatarUrl: String
+  }
+
   type Mutation {
     signUp(input: SignUpInput!): AuthPayload!
     login(input: LoginInput!): AuthPayload!
@@ -292,6 +304,9 @@ const typeDefs = `
     generateEncouragement(input: GenerateEncouragementInput!): GenerateEncouragementPayload!
     resendVerification(email: String!): Boolean!
     verifyEmail(token: String!): Boolean!
+    updateMyProfile(input: UpdateMyProfileInput!): SettingsProfile!
+    updateMyPassword(newPassword: String!): Boolean!
+    sendPasswordResetEmail: Boolean!
   }
 
   type Query {
@@ -311,6 +326,7 @@ const typeDefs = `
       includeMessages: Boolean
     ): ChatBootstrapPayload!
     bibleFavorites: [BibleFavorite!]!
+    myProfile: SettingsProfile!
   }
 `;
 
@@ -648,6 +664,23 @@ const resolvers = {
           updatedAt: item.updated_at,
         };
       });
+    },
+    myProfile: async (_: unknown, __: unknown, context: GraphQlContext) => {
+      const { user, supabase } = await requireUserFromAuthHeader(context.authHeader);
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id,email,full_name,avatar_url")
+        .eq("id", user.id)
+        .single();
+
+      if (error) throw error;
+
+      return {
+        id: data.id,
+        email: data.email,
+        fullName: data.full_name,
+        avatarUrl: data.avatar_url ?? null,
+      };
     },
   },
   Mutation: {
@@ -1356,6 +1389,73 @@ const resolvers = {
         email_confirm: true
       });
 
+      return true;
+    },
+    updateMyProfile: async (
+      _: unknown,
+      args: { input: { fullName?: string | null; avatarUrl?: string | null } },
+      context: GraphQlContext
+    ) => {
+      const { user, supabase } = await requireUserFromAuthHeader(context.authHeader);
+
+      const updates: { full_name?: string | null; avatar_url?: string | null } = {};
+      if (typeof args.input.fullName !== "undefined") {
+        updates.full_name = args.input.fullName?.trim() || null;
+      }
+      if (typeof args.input.avatarUrl !== "undefined") {
+        updates.avatar_url = args.input.avatarUrl?.trim() || null;
+      }
+
+      const { data, error } = await supabase
+        .from("profiles")
+        .update(updates)
+        .eq("id", user.id)
+        .select("id,email,full_name,avatar_url")
+        .single();
+
+      if (error) throw error;
+
+      return {
+        id: data.id,
+        email: data.email,
+        fullName: data.full_name,
+        avatarUrl: data.avatar_url ?? null,
+      };
+    },
+    updateMyPassword: async (
+      _: unknown,
+      args: { newPassword: string },
+      context: GraphQlContext
+    ) => {
+      const { user, supabase } = await requireUserFromAuthHeader(context.authHeader);
+      const nextPassword = args.newPassword?.trim();
+      if (!nextPassword || nextPassword.length < 8) {
+        throw new Error("Password must be at least 8 characters.");
+      }
+
+      const { error } = await supabase.auth.admin.updateUserById(user.id, {
+        password: nextPassword,
+      });
+      if (error) throw error;
+      return true;
+    },
+    sendPasswordResetEmail: async (_: unknown, __: unknown, context: GraphQlContext) => {
+      const { user } = await requireUserFromAuthHeader(context.authHeader);
+      const email = user.email?.trim();
+      if (!email) throw new Error("Email not found.");
+
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+      if (!supabaseUrl || !supabaseAnonKey || !siteUrl) {
+        throw new Error("Supabase env vars are missing.");
+      }
+
+      const supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+      const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+        redirectTo: `${siteUrl}/login`,
+      });
+      if (error) throw error;
       return true;
     },
   },

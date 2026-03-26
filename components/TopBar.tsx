@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { Cross, Menu, MessageSquare, Plus, User, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
+import { fetchMySettingsProfile } from "@/lib/graphql/settings/hooks";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -26,6 +28,10 @@ type ChatTopbarState = {
   activeConversationId: string | null;
 };
 
+type ProfileTopbarState = {
+  avatarUrl: string | null;
+};
+
 export default function TopBar() {
   const router = useRouter();
   const pathname = usePathname();
@@ -38,6 +44,9 @@ export default function TopBar() {
   const [chatTopbar, setChatTopbar] = useState<ChatTopbarState>({
     conversations: [],
     activeConversationId: null,
+  });
+  const [profileTopbar, setProfileTopbar] = useState<ProfileTopbarState>({
+    avatarUrl: null,
   });
 
   useEffect(() => {
@@ -52,6 +61,29 @@ export default function TopBar() {
 
     window.addEventListener("abide:bible-header", handleBibleHeader);
     return () => window.removeEventListener("abide:bible-header", handleBibleHeader);
+  }, []);
+
+  useEffect(() => {
+    async function loadProfileForTopbar() {
+      try {
+        const profile = await fetchMySettingsProfile();
+        setProfileTopbar({ avatarUrl: profile.avatarUrl ?? null });
+      } catch {
+        // Keep default icon if profile cannot be loaded.
+      }
+    }
+
+    const handleProfileTopbar = (event: Event) => {
+      const customEvent = event as CustomEvent<ProfileTopbarState>;
+      if (!customEvent.detail) return;
+      setProfileTopbar({
+        avatarUrl: customEvent.detail.avatarUrl ?? null,
+      });
+    };
+
+    void loadProfileForTopbar();
+    window.addEventListener("abide:profile-topbar", handleProfileTopbar);
+    return () => window.removeEventListener("abide:profile-topbar", handleProfileTopbar);
   }, []);
 
   useEffect(() => {
@@ -122,7 +154,18 @@ export default function TopBar() {
               className="h-9 w-9 rounded-full border-gold/15 flex-shrink-0 bg-gold/5"
               aria-label="User menu"
             >
-              <User className="h-4 w-4 text-gold" strokeWidth={2} />
+              {profileTopbar.avatarUrl ? (
+                <Image
+                  src={profileTopbar.avatarUrl}
+                  alt="Profile avatar"
+                  width={32}
+                  height={32}
+                  unoptimized
+                  className="h-8 w-8 rounded-full object-cover border border-gold/20"
+                />
+              ) : (
+                <User className="h-4 w-4 text-gold" strokeWidth={2} />
+              )}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
