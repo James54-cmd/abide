@@ -1,3 +1,22 @@
 {
-  "extends": "next/core-web-vitals"
+  "extends": "next/core-web-vitals",
+  "overrides": [
+    {
+      "files": ["app/**/page.tsx"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "next/navigation",
+                "importNames": ["useSearchParams"],
+                "message": "Do not use useSearchParams in app/.../page.tsx. Keep a Server Component shell with <Suspense> and move the hook to a \"use client\" page under features/ (see SKILL.md: useSearchParams + AuthSearchParamsFallback)."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
 }

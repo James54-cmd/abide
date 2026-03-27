@@ -20,7 +20,7 @@ function getAuthRedirectUrl() {
 
 export default function LoginPage() {
   const router = useRouter();
-  const [mode, setMode] = useState<"login" | "signup">("signup");
+  const [mode, setMode] = useState<"login" | "signup">("login");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -193,20 +193,7 @@ export default function LoginPage() {
       <div className="w-full rounded-3xl border border-gold/10 bg-white/70 dark:bg-dark-card/70 backdrop-blur-sm p-4 sm:p-5 space-y-3 shadow-warm">
         <div className="grid grid-cols-2 gap-2 rounded-full bg-parchment dark:bg-dark-bg p-1 border border-gold/10">
           <button
-            onClick={() => {
-              setMode("signup");
-              setMessage(null);
-              setError(null);
-            }}
-            className={`rounded-full py-2.5 text-sm font-semibold transition-colors ${
-              mode === "signup"
-                ? "bg-gold text-white"
-                : "text-muted hover:text-ink dark:hover:text-parchment"
-            }`}
-          >
-            Sign up
-          </button>
-          <button
+            type="button"
             onClick={() => {
               setMode("login");
               setMessage(null);
@@ -219,6 +206,21 @@ export default function LoginPage() {
             }`}
           >
             Log in
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMode("signup");
+              setMessage(null);
+              setError(null);
+            }}
+            className={`rounded-full py-2.5 text-sm font-semibold transition-colors ${
+              mode === "signup"
+                ? "bg-gold text-white"
+                : "text-muted hover:text-ink dark:hover:text-parchment"
+            }`}
+          >
+            Sign up
           </button>
         </div>
 

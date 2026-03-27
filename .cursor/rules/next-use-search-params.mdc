@@ -1,0 +1,13 @@
+---
+description: Next.js App Router — useSearchParams must not break SSG; use Suspense shells
+globs: app/**/page.tsx,features/**/pages/**/*.tsx
+alwaysApply: false
+---
+
+# `useSearchParams` and static generation
+
+- **`app/**/page.tsx`**: Must **not** import **`useSearchParams`** from `next/navigation` (ESLint enforces this). Keep the file a **Server Component** that wraps the real UI in **`<Suspense fallback={<AuthSearchParamsFallback />}>`** and imports from **`features/.../pages/`**.
+- **`features/**/pages/*Page.tsx`** (client): **`useSearchParams()`** is allowed here; the **route’s** `app/.../page.tsx` must still provide the **Suspense** boundary (or the segment uses `export const dynamic = "force-dynamic"`).
+- Hooks (e.g. chat) that call **`useSearchParams`** must be mounted under a parent that is already inside **Suspense** (same idea).
+
+Full write-up: **SKILL.md** section *Next.js App Router — `useSearchParams` and static generation*.
