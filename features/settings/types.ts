@@ -4,3 +4,5 @@ export type SettingsProfile = {
   fullName: string;
   avatarUrl: string | null;
 };
+
+export type SettingsTab = "profile" | "security";

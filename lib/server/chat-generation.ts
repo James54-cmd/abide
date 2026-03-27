@@ -2,12 +2,7 @@ import OpenAI from "openai";
 import type { EncouragementResponse } from "@/types";
 import { requireUserFromAuthHeader } from "@/lib/server/supabase-admin";
 
-type MatchDocumentRow = {
-  id: number;
-  content: string;
-  metadata: Record<string, unknown>;
-  similarity: number;
-};
+import { matchDocuments, type MatchDocumentRow } from "@/lib/supabase/chat/rpc";
 
 type ChatHistoryRow = {
   role: "user" | "assistant";
@@ -282,13 +277,8 @@ export async function generateEncouragementForUser(input: {
         if (!queryEmbedding) {
           throw new Error("Failed to generate embedding.");
         }
-        const { data: contextRows, error: matchError } = await supabase.rpc("match_documents", {
-          query_embedding: queryEmbedding,
-          match_count: 4,
-          filter: {},
-        });
-        if (matchError) throw matchError;
-        return ((contextRows ?? []) as MatchDocumentRow[]).map((row) => `- ${row.content}`).join("\n");
+        const contextRows = await matchDocuments(supabase, queryEmbedding, 4);
+        return contextRows.map((row) => `- ${row.content}`).join("\n");
       })()
     : Promise.resolve("");
 

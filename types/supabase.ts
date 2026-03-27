@@ -113,6 +113,10 @@ export interface Database {
           password_reset_token: string | null;
           password_reset_expires_at: string | null;
           password_reset_last_sent_at: string | null;
+          email_change_pending: string | null;
+          email_change_otp: string | null;
+          email_change_otp_expires_at: string | null;
+          email_change_otp_last_sent_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -124,6 +128,10 @@ export interface Database {
           password_reset_token?: string | null;
           password_reset_expires_at?: string | null;
           password_reset_last_sent_at?: string | null;
+          email_change_pending?: string | null;
+          email_change_otp?: string | null;
+          email_change_otp_expires_at?: string | null;
+          email_change_otp_last_sent_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -135,6 +143,10 @@ export interface Database {
           password_reset_token?: string | null;
           password_reset_expires_at?: string | null;
           password_reset_last_sent_at?: string | null;
+          email_change_pending?: string | null;
+          email_change_otp?: string | null;
+          email_change_otp_expires_at?: string | null;
+          email_change_otp_last_sent_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };

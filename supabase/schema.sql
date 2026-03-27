@@ -8,6 +8,10 @@ create table if not exists public.profiles (
   password_reset_token text,
   password_reset_expires_at timestamptz,
   password_reset_last_sent_at timestamptz,
+  email_change_pending text,
+  email_change_otp text,
+  email_change_otp_expires_at timestamptz,
+  email_change_otp_last_sent_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

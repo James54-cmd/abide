@@ -4,17 +4,9 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import { Cross, Menu, MessageSquare, Plus, User, X } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { getSupabaseBrowserClient } from "@/lib/supabase";
+import { usePathname } from "next/navigation";
 import { fetchMySettingsProfile } from "@/lib/graphql/settings/hooks";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
 
@@ -33,7 +25,6 @@ type ProfileTopbarState = {
 };
 
 export default function TopBar() {
-  const router = useRouter();
   const pathname = usePathname();
   const isBiblePage = pathname === "/bible";
   const isChatPage = pathname === "/chat";
@@ -100,13 +91,6 @@ export default function TopBar() {
     return () => window.removeEventListener("abide:chat-topbar", handleChatTopbar);
   }, []);
 
-  const handleLogout = async () => {
-    const supabase = getSupabaseBrowserClient();
-    await supabase.auth.signOut({ scope: "local" });
-    router.replace("/login");
-    router.refresh();
-  };
-
   const handleOpenBibleNav = () => {
     window.dispatchEvent(new Event("abide:bible-open-nav-sheet"));
   };
@@ -145,14 +129,13 @@ export default function TopBar() {
             </span>
           </div>
         </Link>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
+        <Link href="/settings" aria-label="Open profile">
             <Button
               type="button"
               variant="outline"
               size="icon"
               className="h-9 w-9 rounded-full border-gold/15 flex-shrink-0 bg-gold/5"
-              aria-label="User menu"
+              aria-label="Open profile"
             >
               {profileTopbar.avatarUrl ? (
                 <Image
@@ -167,20 +150,7 @@ export default function TopBar() {
                 <User className="h-4 w-4 text-gold" strokeWidth={2} />
               )}
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem asChild className="cursor-pointer">
-              <Link href="/settings">Settings</Link>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="cursor-pointer text-red-600 focus:bg-red-500/10 focus:text-red-600 dark:focus:text-red-500"
-              onClick={() => void handleLogout()}
-            >
-              Log out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        </Link>
       </div>
       {isBiblePage ? (
         <div className="bg-parchment/95 dark:bg-dark-bg/95 backdrop-blur-sm border-t border-gold/10 px-4 py-3 flex items-center justify-between">

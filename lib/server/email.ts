@@ -284,3 +284,49 @@ export async function sendPasswordResetEmail(email: string, link: string, fullNa
     `,
   });
 }
+
+export async function sendEmailChangeOtpEmail(email: string, otp: string, fullName?: string) {
+  if (!host || !user || !pass) {
+    console.error("SMTP settings are missing in .env.local. Email change OTP NOT sent.");
+    return;
+  }
+
+  const from = process.env.SMTP_FROM || user;
+  const nameToUse = fullName || email.split("@")[0];
+
+  await transporter.sendMail({
+    from: `"Abide" <${from}>`,
+    to: email,
+    subject: "Your Abide email change code",
+    html: `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Email Change Verification – Abide</title>
+</head>
+<body style="margin:0; padding:0; background-color:#FBFAF7; font-family: Georgia, 'Times New Roman', serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#FBFAF7; padding: 48px 16px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" border="0"
+          style="max-width:600px; width:100%; background-color:#FFFFFF; border:1px solid #E0D8C0; border-radius:4px;">
+          <tr>
+            <td align="center" style="padding: 36px 32px;">
+              <p style="margin:0; font-size:11px; letter-spacing:6px; text-transform:uppercase; color:#D4AF37;">A B I D E</p>
+              <p style="margin:22px 0 10px; font-size:16px; color:#0F0E0B;">Hello ${nameToUse},</p>
+              <p style="margin:0 0 18px; font-size:14px; color:#5a4f2a;">Use this code to confirm your new email address:</p>
+              <p style="margin:0; font-size:32px; font-weight:700; letter-spacing:8px; color:#b8930a;">${otp}</p>
+              <p style="margin:18px 0 0; font-size:12px; color:#8a805d;">This code expires in 10 minutes.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+    `,
+  });
+}
