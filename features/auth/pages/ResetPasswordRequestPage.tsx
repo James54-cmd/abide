@@ -25,6 +25,7 @@ export default function ResetPasswordRequestPage({ initialEmail = "" }: Props) {
           message={state.message}
           error={state.error}
           wrongOtpEncouragement={state.wrongOtpEncouragement}
+          wrongOtpAttempts={state.wrongOtpAttempts}
           isSendingOtp={state.isSendingOtp}
           isResettingPassword={state.isResettingPassword}
           canResendOtp={state.canResendOtp}

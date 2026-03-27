@@ -15,6 +15,7 @@ type Props = {
   message: string | null;
   error: string | null;
   wrongOtpEncouragement: WrongOtpEncouragement | null;
+  wrongOtpAttempts: number;
   isSendingOtp: boolean;
   isResettingPassword: boolean;
   canResendOtp: boolean;
@@ -39,6 +40,7 @@ export default function ResetPasswordRequestCard({
   message,
   error,
   wrongOtpEncouragement,
+  wrongOtpAttempts,
   isSendingOtp,
   isResettingPassword,
   canResendOtp,
@@ -160,6 +162,7 @@ export default function ResetPasswordRequestCard({
         resendLabel={
           isSendingOtp ? "Sending..." : canResendOtp ? "Send code again" : `Send again in ${otpResendCountdownLabel}`
         }
+        invalidAttemptToken={wrongOtpAttempts}
         helperText="For security, this code expires quickly. You can try it up to three times before requesting a new one."
       >
         {wrongOtpEncouragement ? (

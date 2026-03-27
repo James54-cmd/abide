@@ -119,6 +119,7 @@ export default function SettingsPage() {
                   isVerifyingEmailOtp={state.isVerifyingEmailOtp}
                   isEmailOtpSent={state.isEmailOtpSent}
                   isOtpModalOpen={state.isOtpModalOpen}
+                  emailOtpInvalidToken={state.emailOtpInvalidToken}
                   canResendEmailOtp={state.canResendEmailOtp}
                   otpResendCountdownLabel={state.otpResendCountdownLabel}
                   onFullNameChange={(value) =>

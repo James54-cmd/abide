@@ -32,9 +32,17 @@ const config: Config = {
           "0%, 80%, 100%": { opacity: "0.3", transform: "scale(0.8)" },
           "40%": { opacity: "1", transform: "scale(1)" },
         },
+        "otp-shake": {
+          "0%, 100%": { transform: "translateX(0)" },
+          "18%": { transform: "translateX(-7px)" },
+          "36%": { transform: "translateX(7px)" },
+          "54%": { transform: "translateX(-5px)" },
+          "72%": { transform: "translateX(5px)" },
+        },
       },
       animation: {
         "pulse-dot": "pulse-dot 1.4s ease-in-out infinite",
+        "otp-shake": "otp-shake 0.45s ease-in-out",
       },
     },
   },

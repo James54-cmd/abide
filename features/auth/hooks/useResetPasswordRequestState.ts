@@ -52,8 +52,11 @@ export function useResetPasswordRequestState(options?: UseResetPasswordRequestSt
     return () => window.clearInterval(timer);
   }, [otpResendCooldownSeconds]);
 
+  /** Keep verse / copy visible after the modal auto-clears digits; drop it once the user types a new code. */
   useEffect(() => {
-    setWrongOtpEncouragement(null);
+    if (otp.length > 0) {
+      setWrongOtpEncouragement(null);
+    }
   }, [otp]);
 
   const sendOtp = useCallback(async () => {
@@ -170,6 +173,7 @@ export function useResetPasswordRequestState(options?: UseResetPasswordRequestSt
     isSendingOtp,
     isResettingPassword,
     wrongOtpEncouragement,
+    wrongOtpAttempts,
     canResendOtp,
     otpResendCountdownLabel,
     setEmail,

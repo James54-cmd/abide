@@ -37,6 +37,7 @@ export function useSettingsState() {
   const [isVerifyingEmailOtp, setIsVerifyingEmailOtp] = useState(false);
   const [isEmailOtpSent, setIsEmailOtpSent] = useState(false);
   const [isOtpModalOpen, setIsOtpModalOpen] = useState(false);
+  const [emailOtpInvalidToken, setEmailOtpInvalidToken] = useState(0);
   const [otpResendCooldownSeconds, setOtpResendCooldownSeconds] = useState(0);
 
   const [profile, setProfile] = useState<SettingsProfile>({
@@ -114,6 +115,7 @@ export function useSettingsState() {
     setEmailOtp("");
     setIsEmailOtpSent(false);
     setIsOtpModalOpen(false);
+    setEmailOtpInvalidToken(0);
     setOtpResendCooldownSeconds(0);
     setIsEditingProfile(true);
   };
@@ -190,6 +192,7 @@ export function useSettingsState() {
       await requestEmailChangeOtp(newEmail);
       setIsEmailOtpSent(true);
       setIsOtpModalOpen(true);
+      setEmailOtpInvalidToken(0);
       setOtpResendCooldownSeconds(OTP_RESEND_COOLDOWN_SECONDS);
       toast.success("OTP sent to your new email.");
     } catch (error) {
@@ -232,6 +235,7 @@ export function useSettingsState() {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not verify OTP.";
       toast.error(message);
+      setEmailOtpInvalidToken((n) => n + 1);
     } finally {
       setIsVerifyingEmailOtp(false);
     }
@@ -306,6 +310,7 @@ export function useSettingsState() {
     isVerifyingEmailOtp,
     isEmailOtpSent,
     isOtpModalOpen,
+    emailOtpInvalidToken,
     canResendEmailOtp,
     otpResendCountdownLabel,
     setActiveTab,

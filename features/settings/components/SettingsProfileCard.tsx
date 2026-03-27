@@ -14,6 +14,7 @@ type Props = {
   isVerifyingEmailOtp: boolean;
   isEmailOtpSent: boolean;
   isOtpModalOpen: boolean;
+  emailOtpInvalidToken: number;
   canResendEmailOtp: boolean;
   otpResendCountdownLabel: string;
   onFullNameChange: (value: string) => void;
@@ -39,6 +40,7 @@ export default function SettingsProfileCard({
   isVerifyingEmailOtp,
   isEmailOtpSent,
   isOtpModalOpen,
+  emailOtpInvalidToken,
   canResendEmailOtp,
   otpResendCountdownLabel,
   onFullNameChange,
@@ -164,6 +166,7 @@ export default function SettingsProfileCard({
         isBusy={isSavingProfile}
         canResend={canResendEmailOtp}
         resendLabel={canResendEmailOtp ? "Send code again" : `Send again in ${otpResendCountdownLabel}`}
+        invalidAttemptToken={emailOtpInvalidToken}
         helperText="Your word is a lamp for my feet, a light on my path. - Psalm 119:105"
       />
     </div>
