@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import PageTransition from "@/components/PageTransition";
 import EmptyState from "@/components/ui/EmptyState";
 import ChatBubble from "@/features/chat/components/ChatBubble";
+import ChatPageSkeleton from "@/features/chat/components/ChatPageSkeleton";
 import LoadingDots from "@/features/chat/components/LoadingDots";
 import { useChatState } from "@/features/chat/hooks/useChatState";
 import { ArrowDown } from "lucide-react";
@@ -51,6 +52,9 @@ export default function ChatPage() {
     <PageTransition>
       <div className="relative px-4 pt-4 pb-20 min-h-full">
         <div className="space-y-2">
+          {isBootstrapping ? (
+            <ChatPageSkeleton />
+          ) : null}
           {!isBootstrapping && messages.length === 0 && (
             <EmptyState
               className="py-20"
@@ -58,13 +62,14 @@ export default function ChatPage() {
               description="God&apos;s Word has something for every season of life."
             />
           )}
-          {messages.map((msg) => (
-            <ChatBubble
-              key={msg.id}
-              message={msg}
-              onBookmarkVerse={handleBookmark}
-            />
-          ))}
+          {!isBootstrapping &&
+            messages.map((msg) => (
+              <ChatBubble
+                key={msg.id}
+                message={msg}
+                onBookmarkVerse={handleBookmark}
+              />
+            ))}
           {isLoading && <LoadingDots />}
           <div ref={bottomRef} className="h-px w-full" />
         </div>

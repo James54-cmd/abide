@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import PageTransition from "@/components/PageTransition";
+import { Skeleton } from "@/components/ui/skeleton";
 import EmptyState from "@/components/ui/EmptyState";
 import BibleVerseItem from "@/features/bible/components/BibleVerseItem";
 import BibleSettingsSheet from "@/features/bible/components/BibleSettingsSheet";
@@ -20,8 +21,16 @@ export default function BiblePage() {
             {state.error ? (
               <p className="text-xs text-red-600 text-center">{state.error}</p>
             ) : state.isLoading ? (
-              <div className="flex items-center justify-center py-20">
-                <div className="w-6 h-6 border-2 border-gold/30 border-t-gold rounded-full animate-spin" />
+              <div className="space-y-6 py-2" aria-busy aria-label="Loading chapter">
+                <Skeleton className="h-5 w-48 mx-auto rounded-md" />
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <div key={i} className="space-y-2">
+                    <Skeleton className="h-4 w-14 rounded-md" />
+                    <Skeleton className="h-4 w-full rounded-md" />
+                    <Skeleton className="h-4 w-[95%] rounded-md" />
+                    <Skeleton className="h-4 w-[88%] rounded-md" />
+                  </div>
+                ))}
               </div>
             ) : state.verses.length > 0 ? (
               <AnimatePresence mode="wait">

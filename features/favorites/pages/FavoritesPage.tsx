@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Heart, Trash2 } from "lucide-react";
 import Link from "next/link";
 import PageTransition from "@/components/PageTransition";
+import { Skeleton } from "@/components/ui/skeleton";
 import EmptyState from "@/components/ui/EmptyState";
 import { useFavoritesState } from "@/features/favorites/hooks/useFavoritesState";
 import ConfirmActionModal from "@/components/ui/ConfirmActionModal";
@@ -43,9 +44,9 @@ export default function FavoritesPage() {
 
         {isLoading ? (
           <div className="space-y-3">
-             {[1, 2, 3].map(i => (
-               <div key={i} className="h-32 bg-gold/5 dark:bg-gold/5 rounded-2xl animate-pulse" />
-             ))}
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-32 w-full rounded-2xl" />
+            ))}
           </div>
         ) : favorites.length === 0 ? (
           <EmptyState

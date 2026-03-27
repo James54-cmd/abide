@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { ChevronRight } from "lucide-react";
 import PageTransition from "@/components/PageTransition";
+import { Skeleton } from "@/components/ui/skeleton";
 import VerseOfTheDay from "@/features/home/components/VerseOfTheDay";
 import EncouragementInput from "@/components/EncouragementInput";
 import { verseOfTheDay, mockConversations } from "@/lib/mock-data";
@@ -58,9 +59,9 @@ export default function HomePage() {
           </h3>
           <div className="space-y-2">
             {isLoading ? (
-              <div className="space-y-2 animate-pulse">
+              <div className="space-y-2">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="h-16 bg-white/50 dark:bg-dark-card/50 rounded-2xl" />
+                  <Skeleton key={i} className="h-16 w-full rounded-2xl" />
                 ))}
               </div>
             ) : conversations.length > 0 ? (
