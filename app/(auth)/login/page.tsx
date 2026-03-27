@@ -253,7 +253,11 @@ export default function LoginPage() {
         {mode === "login" ? (
           <div className="flex items-center justify-between px-1 pt-0.5">
             <Link
-              href="/reset-password"
+              href={
+                email.trim()
+                  ? `/reset-password?email=${encodeURIComponent(email.trim().toLowerCase())}`
+                  : "/reset-password"
+              }
               className="text-xs font-semibold text-gold hover:text-gold/80 transition-colors"
             >
               Forgot password?

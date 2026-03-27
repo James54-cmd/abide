@@ -16,9 +16,19 @@ import { formatCountdown } from "@/lib/utils";
 
 const OTP_RESEND_COOLDOWN_SECONDS = 60;
 
-export function useResetPasswordRequestState() {
+function normalizeInitialEmail(value: string | undefined) {
+  const t = value?.trim();
+  if (!t) return "";
+  return t.toLowerCase();
+}
+
+type UseResetPasswordRequestStateOptions = {
+  initialEmail?: string;
+};
+
+export function useResetPasswordRequestState(options?: UseResetPasswordRequestStateOptions) {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => normalizeInitialEmail(options?.initialEmail));
   const [otp, setOtp] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");

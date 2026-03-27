@@ -5,8 +5,12 @@ import AuthShell from "@/components/auth/AuthShell";
 import ResetPasswordRequestCard from "@/features/auth/components/ResetPasswordRequestCard";
 import { useResetPasswordRequestState } from "@/features/auth/hooks/useResetPasswordRequestState";
 
-export default function ResetPasswordRequestPage() {
-  const state = useResetPasswordRequestState();
+type Props = {
+  initialEmail?: string;
+};
+
+export default function ResetPasswordRequestPage({ initialEmail = "" }: Props) {
+  const state = useResetPasswordRequestState({ initialEmail });
 
   return (
     <AuthShell>
