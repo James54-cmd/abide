@@ -1,11 +1,7 @@
 import { getApolloClient } from "@/lib/graphql/client";
 import { getAccessToken } from "@/lib/supabase";
 import { MY_SETTINGS_PROFILE_QUERY } from "@/lib/graphql/settings/queries";
-import {
-  SEND_PASSWORD_RESET_EMAIL_MUTATION,
-  UPDATE_MY_PASSWORD_MUTATION,
-  UPDATE_MY_PROFILE_MUTATION,
-} from "@/lib/graphql/settings/mutations";
+import { UPDATE_MY_PASSWORD_MUTATION, UPDATE_MY_PROFILE_MUTATION } from "@/lib/graphql/settings/mutations";
 
 type SettingsProfilePayload = {
   id: string;
@@ -60,13 +56,3 @@ export async function updateMyPassword(newPassword: string) {
   });
 }
 
-export async function sendMyPasswordResetEmail() {
-  const token = await getAccessToken();
-  if (!token) throw new Error("Unauthorized");
-
-  const client = getApolloClient();
-  await client.mutate({
-    mutation: SEND_PASSWORD_RESET_EMAIL_MUTATION,
-    context: { headers: { Authorization: `Bearer ${token}` } },
-  });
-}

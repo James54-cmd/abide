@@ -9,7 +9,9 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/auth/callback") ||
     pathname.startsWith("/auth/verify-token") ||
     pathname.startsWith("/verify") ||
-    pathname.startsWith("/resend_verification");
+    pathname.startsWith("/resend_verification") ||
+    pathname.startsWith("/reset-password") ||
+    pathname.startsWith("/reset_password");
 
   if (isApiRoute) {
     return NextResponse.next();

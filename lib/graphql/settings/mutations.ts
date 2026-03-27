@@ -16,9 +16,3 @@ export const UPDATE_MY_PASSWORD_MUTATION = gql`
     updateMyPassword(newPassword: $newPassword)
   }
 `;
-
-export const SEND_PASSWORD_RESET_EMAIL_MUTATION = gql`
-  mutation SendPasswordResetEmail {
-    sendPasswordResetEmail
-  }
-`;

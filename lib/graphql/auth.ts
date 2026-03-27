@@ -16,10 +16,6 @@ type LoginResponse = {
   login: AuthPayload;
 };
 
-type RequestPasswordResetResponse = {
-  requestPasswordReset: boolean;
-};
-
 const SIGN_UP_MUTATION = gql`
   mutation SignUp($input: SignUpInput!) {
     signUp(input: $input) {
@@ -81,12 +77,6 @@ const RESEND_VERIFICATION_MUTATION = gql`
   }
 `;
 
-const REQUEST_PASSWORD_RESET_MUTATION = gql`
-  mutation RequestPasswordReset($email: String!) {
-    requestPasswordReset(email: $email)
-  }
-`;
-
 export async function resendVerificationWithGraphql(email: string) {
   const client = getApolloClient();
   const { data } = await client.mutate<{ resendVerification: boolean }>({
@@ -95,14 +85,4 @@ export async function resendVerificationWithGraphql(email: string) {
   });
 
   return data?.resendVerification ?? false;
-}
-
-export async function requestPasswordResetWithGraphql(email: string) {
-  const client = getApolloClient();
-  const { data } = await client.mutate<RequestPasswordResetResponse>({
-    mutation: REQUEST_PASSWORD_RESET_MUTATION,
-    variables: { email },
-  });
-
-  return data?.requestPasswordReset ?? false;
 }

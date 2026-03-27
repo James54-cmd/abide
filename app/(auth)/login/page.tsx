@@ -1,13 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AuthShell from "@/components/auth/AuthShell";
-import {
-  loginWithGraphql,
-  requestPasswordResetWithGraphql,
-  signUpWithGraphql,
-} from "@/lib/graphql/auth";
+import { loginWithGraphql, signUpWithGraphql } from "@/lib/graphql/auth";
 import { getSafeAuthRedirectUrl } from "@/lib/auth/redirect";
 import { formatRetryMessage } from "@/lib/auth/verification";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
@@ -31,7 +28,6 @@ export default function LoginPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isResending, setIsResending] = useState(false);
-  const [isSendingReset, setIsSendingReset] = useState(false);
 
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
@@ -192,37 +188,17 @@ export default function LoginPage() {
     }
   };
 
-  const handleForgotPassword = async () => {
-    const normalizedEmail = email.trim().toLowerCase();
-    if (!normalizedEmail) {
-      setError("Enter your email first to reset password.");
-      return;
-    }
-
-    try {
-      setIsSendingReset(true);
-      setMessage(null);
-      setError(null);
-      await requestPasswordResetWithGraphql(normalizedEmail);
-      setMessage("If an account exists for this email, a reset link has been sent.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to send password reset email.");
-    } finally {
-      setIsSendingReset(false);
-    }
-  };
-
   return (
     <AuthShell>
-      <div className="w-full space-y-3">
-        <div className="grid grid-cols-2 gap-2 rounded-full bg-white dark:bg-dark-card p-1 border border-gold/10">
+      <div className="w-full rounded-3xl border border-gold/10 bg-white/70 dark:bg-dark-card/70 backdrop-blur-sm p-4 sm:p-5 space-y-3 shadow-warm">
+        <div className="grid grid-cols-2 gap-2 rounded-full bg-parchment dark:bg-dark-bg p-1 border border-gold/10">
           <button
             onClick={() => {
               setMode("signup");
               setMessage(null);
               setError(null);
             }}
-            className={`rounded-full py-2 text-sm font-medium transition-colors ${
+            className={`rounded-full py-2.5 text-sm font-semibold transition-colors ${
               mode === "signup"
                 ? "bg-gold text-white"
                 : "text-muted hover:text-ink dark:hover:text-parchment"
@@ -236,7 +212,7 @@ export default function LoginPage() {
               setMessage(null);
               setError(null);
             }}
-            className={`rounded-full py-2 text-sm font-medium transition-colors ${
+            className={`rounded-full py-2.5 text-sm font-semibold transition-colors ${
               mode === "login"
                 ? "bg-gold text-white"
                 : "text-muted hover:text-ink dark:hover:text-parchment"
@@ -272,9 +248,29 @@ export default function LoginPage() {
           className="w-full bg-white dark:bg-dark-card border border-gold/10 rounded-full px-4 py-3.5 text-sm text-ink dark:text-parchment placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-gold/30"
         />
 
+        {mode === "login" ? (
+          <div className="flex items-center justify-between px-1 pt-0.5">
+            <Link
+              href="/reset-password"
+              className="text-xs font-semibold text-gold hover:text-gold/80 transition-colors"
+            >
+              Forgot password?
+            </Link>
+            <button
+              type="button"
+              onClick={handleResendFromLogin}
+              disabled={isLoadingCredentials || isResending || !email.trim()}
+              className="text-xs font-medium text-muted hover:text-ink dark:hover:text-parchment transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isResending ? "Sending verification..." : "Resend verification"}
+            </button>
+          </div>
+        ) : null}
+
         <button
+          type="button"
           onClick={handleCredentialsSubmit}
-          disabled={isLoadingCredentials || isResending || isSendingReset}
+          disabled={isLoadingCredentials || isResending}
           className="w-full bg-gold text-white rounded-full py-3.5 text-sm font-semibold shadow-warm transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {isLoadingCredentials
@@ -286,28 +282,16 @@ export default function LoginPage() {
               : "Log in"}
         </button>
 
-        {mode === "login" ? (
-          <button
-            onClick={handleResendFromLogin}
-            disabled={isLoadingCredentials || isResending || isSendingReset || !email.trim()}
-            className="w-full border border-gold/20 text-gold rounded-full py-3.5 text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            {isResending ? "Sending verification..." : "Resend verification email"}
-          </button>
+        {message ? (
+          <p className="text-xs text-green-700 text-center rounded-2xl bg-green-50 px-3 py-2 border border-green-100">
+            {message}
+          </p>
         ) : null}
-
-        {mode === "login" ? (
-          <button
-            onClick={handleForgotPassword}
-            disabled={isLoadingCredentials || isResending || isSendingReset || !email.trim()}
-            className="w-full border border-gold/20 text-gold rounded-full py-3.5 text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            {isSendingReset ? "Sending reset link..." : "Forgot password"}
-          </button>
+        {error ? (
+          <p className="text-xs text-red-600 text-center rounded-2xl bg-red-50 px-3 py-2 border border-red-100">
+            {error}
+          </p>
         ) : null}
-
-        {message ? <p className="text-xs text-green-700 text-center">{message}</p> : null}
-        {error ? <p className="text-xs text-red-600 text-center">{error}</p> : null}
       </div>
     </AuthShell>
   );

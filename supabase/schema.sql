@@ -5,6 +5,9 @@ create table if not exists public.profiles (
   full_name text,
   avatar_url text,
   email text not null unique,
+  password_reset_token text,
+  password_reset_expires_at timestamptz,
+  password_reset_last_sent_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

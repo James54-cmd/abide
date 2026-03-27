@@ -2,11 +2,8 @@
 
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { uploadAvatarFile } from "@/lib/api/settings/requests";
-import {
-  fetchMySettingsProfile,
-  sendMyPasswordResetEmail,
-  updateMySettingsProfile,
-} from "@/lib/graphql/settings/hooks";
+import { requestPasswordResetEmail } from "@/lib/api/auth/password-reset";
+import { fetchMySettingsProfile, updateMySettingsProfile } from "@/lib/graphql/settings/hooks";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { toast } from "sonner";
 import type { SettingsProfile } from "@/features/settings/types";
@@ -145,7 +142,7 @@ export function useSettingsState() {
     if (!profile.email) return;
     try {
       setIsSendingReset(true);
-      await sendMyPasswordResetEmail();
+      await requestPasswordResetEmail(profile.email);
       toast.success("Reset email sent");
     } catch {
       toast.error("Could not send reset email");

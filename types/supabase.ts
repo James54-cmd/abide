@@ -110,6 +110,9 @@ export interface Database {
           full_name: string | null;
           avatar_url: string | null;
           email: string;
+          password_reset_token: string | null;
+          password_reset_expires_at: string | null;
+          password_reset_last_sent_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -118,6 +121,9 @@ export interface Database {
           full_name?: string | null;
           avatar_url?: string | null;
           email: string;
+          password_reset_token?: string | null;
+          password_reset_expires_at?: string | null;
+          password_reset_last_sent_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -126,6 +132,9 @@ export interface Database {
           full_name?: string | null;
           avatar_url?: string | null;
           email?: string;
+          password_reset_token?: string | null;
+          password_reset_expires_at?: string | null;
+          password_reset_last_sent_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
