@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AuthShell from "@/components/auth/AuthShell";
@@ -33,7 +33,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!isEnteringApp) return;
-    const id = window.setTimeout(() => router.replace("/"), 1600);
+    const id = window.setTimeout(() => router.replace("/"), 3000);
     return () => window.clearTimeout(id);
   }, [isEnteringApp, router]);
 
@@ -54,6 +54,11 @@ export default function LoginPage() {
       window.history.replaceState({}, "", window.location.pathname);
     }
   }, []);
+
+  const handleFormSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void handleCredentialsSubmit();
+  };
 
   const validateForm = () => {
     if (mode === "signup" && !fullName.trim()) {
@@ -240,69 +245,73 @@ export default function LoginPage() {
           </button>
         </div>
 
-        {mode === "signup" ? (
+        <form className="space-y-3" noValidate onSubmit={handleFormSubmit}>
+          {mode === "signup" ? (
+            <input
+              type="text"
+              value={fullName}
+              onChange={(event) => setFullName(event.target.value)}
+              placeholder="Full name"
+              autoComplete="name"
+              className="w-full bg-white dark:bg-dark-card border border-gold/10 rounded-full px-4 py-3.5 text-sm text-ink dark:text-parchment placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-gold/30"
+            />
+          ) : null}
+
           <input
-            type="text"
-            value={fullName}
-            onChange={(event) => setFullName(event.target.value)}
-            placeholder="Full name"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="you@example.com"
+            autoComplete="email"
             className="w-full bg-white dark:bg-dark-card border border-gold/10 rounded-full px-4 py-3.5 text-sm text-ink dark:text-parchment placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-gold/30"
           />
-        ) : null}
 
-        <input
-          type="email"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          placeholder="you@example.com"
-          className="w-full bg-white dark:bg-dark-card border border-gold/10 rounded-full px-4 py-3.5 text-sm text-ink dark:text-parchment placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-gold/30"
-        />
+          <input
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="Password"
+            autoComplete={mode === "signup" ? "new-password" : "current-password"}
+            className="w-full bg-white dark:bg-dark-card border border-gold/10 rounded-full px-4 py-3.5 text-sm text-ink dark:text-parchment placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-gold/30"
+          />
 
-        <input
-          type="password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          placeholder="Password"
-          className="w-full bg-white dark:bg-dark-card border border-gold/10 rounded-full px-4 py-3.5 text-sm text-ink dark:text-parchment placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-gold/30"
-        />
+          {mode === "login" ? (
+            <div className="flex items-center justify-between px-1 pt-0.5">
+              <Link
+                href={
+                  email.trim()
+                    ? `/reset-password?email=${encodeURIComponent(email.trim().toLowerCase())}`
+                    : "/reset-password"
+                }
+                className="text-xs font-semibold text-gold hover:text-gold/80 transition-colors"
+              >
+                Forgot password?
+              </Link>
+              <button
+                type="button"
+                onClick={handleResendFromLogin}
+                disabled={isLoadingCredentials || isResending || !email.trim()}
+                className="text-xs font-medium text-muted hover:text-ink dark:hover:text-parchment transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isResending ? "Sending verification..." : "Resend verification"}
+              </button>
+            </div>
+          ) : null}
 
-        {mode === "login" ? (
-          <div className="flex items-center justify-between px-1 pt-0.5">
-            <Link
-              href={
-                email.trim()
-                  ? `/reset-password?email=${encodeURIComponent(email.trim().toLowerCase())}`
-                  : "/reset-password"
-              }
-              className="text-xs font-semibold text-gold hover:text-gold/80 transition-colors"
-            >
-              Forgot password?
-            </Link>
-            <button
-              type="button"
-              onClick={handleResendFromLogin}
-              disabled={isLoadingCredentials || isResending || !email.trim()}
-              className="text-xs font-medium text-muted hover:text-ink dark:hover:text-parchment transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isResending ? "Sending verification..." : "Resend verification"}
-            </button>
-          </div>
-        ) : null}
-
-        <button
-          type="button"
-          onClick={handleCredentialsSubmit}
-          disabled={isLoadingCredentials || isResending}
-          className="w-full bg-gold text-white rounded-full py-3.5 text-sm font-semibold shadow-warm transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
-        >
-          {isLoadingCredentials
-            ? mode === "signup"
-              ? "Creating account..."
-              : "Logging in..."
-            : mode === "signup"
-              ? "Create account"
-              : "Log in"}
-        </button>
+          <button
+            type="submit"
+            disabled={isLoadingCredentials || isResending}
+            className="w-full bg-gold text-white rounded-full py-3.5 text-sm font-semibold shadow-warm transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {isLoadingCredentials
+              ? mode === "signup"
+                ? "Creating account..."
+                : "Logging in..."
+              : mode === "signup"
+                ? "Create account"
+                : "Log in"}
+          </button>
+        </form>
 
         {message ? (
           <p className="text-xs text-green-700 text-center rounded-2xl bg-green-50 px-3 py-2 border border-green-100">

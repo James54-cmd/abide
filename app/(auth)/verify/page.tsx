@@ -158,7 +158,7 @@ export default function VerifyPage() {
 
   useEffect(() => {
     if (!isVerifiedLocally) return;
-    const id = window.setTimeout(() => router.replace("/"), 1600);
+    const id = window.setTimeout(() => router.replace("/"), 3000);
     return () => window.clearTimeout(id);
   }, [isVerifiedLocally, router]);
 

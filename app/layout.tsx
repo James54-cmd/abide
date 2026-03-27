@@ -18,6 +18,10 @@ const dmSans = DM_Sans({
 export const metadata: Metadata = {
   title: "Abide — Bible Encouragement",
   description: "A warm, Spirit-filled companion grounded in God's Word.",
+  icons: {
+    icon: [{ url: "/assets/abide-symbol.png", type: "image/png" }],
+    apple: [{ url: "/assets/abide-symbol.png", type: "image/png" }],
+  },
 };
 
 export const viewport: Viewport = {
