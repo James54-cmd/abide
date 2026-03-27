@@ -136,6 +136,10 @@ export default function SettingsProfileCard({
           Edit profile
         </button>
       )}
+
+      {isEditingProfile && isEmailOtpSent ? (
+        <p className="text-xs text-muted">A verification code was sent to your new email.</p>
+      ) : null}
     </div>
   );
 }

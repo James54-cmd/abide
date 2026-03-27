@@ -54,6 +54,8 @@ export async function POST(request: NextRequest) {
         email_change_pending: null,
         email_change_otp: null,
         email_change_otp_expires_at: null,
+        email_change_cancel_token: null,
+        email_change_cancel_expires_at: null,
       })
       .eq("id", user.id);
 

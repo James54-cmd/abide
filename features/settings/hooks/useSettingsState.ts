@@ -49,7 +49,6 @@ export function useSettingsState() {
     () => newPassword.length >= 8 && newPassword === confirmPassword,
     [newPassword, confirmPassword]
   );
-
   useEffect(() => {
     async function loadProfile() {
       try {

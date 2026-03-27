@@ -117,6 +117,8 @@ export interface Database {
           email_change_otp: string | null;
           email_change_otp_expires_at: string | null;
           email_change_otp_last_sent_at: string | null;
+          email_change_cancel_token: string | null;
+          email_change_cancel_expires_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -132,6 +134,8 @@ export interface Database {
           email_change_otp?: string | null;
           email_change_otp_expires_at?: string | null;
           email_change_otp_last_sent_at?: string | null;
+          email_change_cancel_token?: string | null;
+          email_change_cancel_expires_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -147,6 +151,8 @@ export interface Database {
           email_change_otp?: string | null;
           email_change_otp_expires_at?: string | null;
           email_change_otp_last_sent_at?: string | null;
+          email_change_cancel_token?: string | null;
+          email_change_cancel_expires_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };

@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUserFromAuthHeader } from "@/lib/server/supabase-admin";
-import { sendEmailChangeOtpEmail } from "@/lib/server/email";
+import { sendEmailChangeNoticeToOldEmail, sendEmailChangeOtpEmail } from "@/lib/server/email";
 
 const OTP_COOLDOWN_MS = 60 * 1000;
 const OTP_TTL_MS = 10 * 60 * 1000;
+const CANCEL_TTL_MS = 30 * 60 * 1000;
 
 type Body = {
   newEmail?: string;
@@ -59,6 +60,10 @@ export async function POST(request: NextRequest) {
 
     const otp = generateOtp();
     const expiresAt = new Date(now + OTP_TTL_MS).toISOString();
+    const cancelToken = crypto.randomUUID();
+    const cancelExpiresAt = new Date(now + CANCEL_TTL_MS).toISOString();
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(request.url).origin;
+    const cancelLink = `${siteUrl}/auth/cancel-email-change?token=${encodeURIComponent(cancelToken)}`;
     const { error: updateError } = await supabase
       .from("profiles")
       .update({
@@ -66,6 +71,8 @@ export async function POST(request: NextRequest) {
         email_change_otp: otp,
         email_change_otp_expires_at: expiresAt,
         email_change_otp_last_sent_at: new Date(now).toISOString(),
+        email_change_cancel_token: cancelToken,
+        email_change_cancel_expires_at: cancelExpiresAt,
       })
       .eq("id", user.id);
 
@@ -74,6 +81,14 @@ export async function POST(request: NextRequest) {
     }
 
     await sendEmailChangeOtpEmail(newEmail, otp, profile?.full_name ?? undefined);
+    if (user.email) {
+      await sendEmailChangeNoticeToOldEmail(
+        user.email,
+        newEmail,
+        cancelLink,
+        profile?.full_name ?? undefined
+      );
+    }
     return NextResponse.json({ success: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unauthorized.";

@@ -12,6 +12,8 @@ create table if not exists public.profiles (
   email_change_otp text,
   email_change_otp_expires_at timestamptz,
   email_change_otp_last_sent_at timestamptz,
+  email_change_cancel_token text,
+  email_change_cancel_expires_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

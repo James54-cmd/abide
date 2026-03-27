@@ -8,6 +8,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/login") ||
     pathname.startsWith("/auth/callback") ||
     pathname.startsWith("/auth/verify-token") ||
+    pathname.startsWith("/auth/cancel-email-change") ||
+    pathname.startsWith("/cancel-email-change") ||
     pathname.startsWith("/verify") ||
     pathname.startsWith("/resend_verification") ||
     pathname.startsWith("/reset-password") ||

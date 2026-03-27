@@ -330,3 +330,42 @@ export async function sendEmailChangeOtpEmail(email: string, otp: string, fullNa
     `,
   });
 }
+
+export async function sendEmailChangeNoticeToOldEmail(
+  oldEmail: string,
+  newEmail: string,
+  cancelLink: string,
+  fullName?: string
+) {
+  if (!host || !user || !pass) {
+    console.error("SMTP settings are missing in .env.local. Email change notice NOT sent.");
+    return;
+  }
+
+  const from = process.env.SMTP_FROM || user;
+  const nameToUse = fullName || oldEmail.split("@")[0];
+
+  await transporter.sendMail({
+    from: `"Abide" <${from}>`,
+    to: oldEmail,
+    subject: "Security notice: Email change requested",
+    html: `
+<!DOCTYPE html>
+<html lang="en">
+<body style="font-family: Arial, sans-serif; background:#FBFAF7; padding:24px; color:#1f1f1f;">
+  <div style="max-width:560px; margin:0 auto; background:#fff; border:1px solid #e5dcc7; border-radius:10px; padding:24px;">
+    <h2 style="margin-top:0;">Security notice</h2>
+    <p>Hello ${nameToUse},</p>
+    <p>A request was made to change your account email to <strong>${newEmail}</strong>.</p>
+    <p>If this was you, no further action is needed.</p>
+    <p>If this was not you, click this link immediately to cancel the email change:</p>
+    <p><a href="${cancelLink}" style="color:#b8930a; font-weight:600;">Cancel email change</a></p>
+    <p>Or copy this URL into your browser:</p>
+    <p style="word-break:break-all;"><a href="${cancelLink}" style="color:#b8930a;">${cancelLink}</a></p>
+    <p style="color:#777; font-size:12px; margin-top:18px;">Abide Security</p>
+  </div>
+</body>
+</html>
+    `,
+  });
+}
