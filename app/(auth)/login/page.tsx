@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AuthShell from "@/components/auth/AuthShell";
+import PageLoader from "@/components/PageLoader";
 import { loginWithGraphql, signUpWithGraphql } from "@/lib/graphql/auth";
 import { getSafeAuthRedirectUrl } from "@/lib/auth/redirect";
 import { formatRetryMessage } from "@/lib/auth/verification";
@@ -28,6 +29,13 @@ export default function LoginPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isResending, setIsResending] = useState(false);
+  const [isEnteringApp, setIsEnteringApp] = useState(false);
+
+  useEffect(() => {
+    if (!isEnteringApp) return;
+    const id = window.setTimeout(() => router.replace("/"), 1600);
+    return () => window.clearTimeout(id);
+  }, [isEnteringApp, router]);
 
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
@@ -125,7 +133,7 @@ export default function LoginPage() {
       });
       if (setSessionError) throw setSessionError;
 
-      router.replace("/");
+      setIsEnteringApp(true);
     } catch (err) {
       const fallbackError = `Unable to ${mode === "signup" ? "sign up" : "log in"}.`;
       const nextError = err instanceof Error ? err.message : fallbackError;
@@ -187,6 +195,14 @@ export default function LoginPage() {
       setIsResending(false);
     }
   };
+
+  if (isEnteringApp) {
+    return (
+      <AuthShell>
+        <PageLoader className="min-h-[55vh]" />
+      </AuthShell>
+    );
+  }
 
   return (
     <AuthShell>

@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { ChevronRight } from "lucide-react";
 import PageTransition from "@/components/PageTransition";
-import { Skeleton } from "@/components/ui/skeleton";
+import PageLoader from "@/components/PageLoader";
 import VerseOfTheDay from "@/features/home/components/VerseOfTheDay";
 import EncouragementInput from "@/components/EncouragementInput";
 import { verseOfTheDay, mockConversations } from "@/lib/mock-data";
@@ -59,11 +59,7 @@ export default function HomePage() {
           </h3>
           <div className="space-y-2">
             {isLoading ? (
-              <div className="space-y-2">
-                {[1, 2, 3].map((i) => (
-                  <Skeleton key={i} className="h-16 w-full rounded-2xl" />
-                ))}
-              </div>
+              <PageLoader size="compact" />
             ) : conversations.length > 0 ? (
               conversations.map((conv) => (
                 <button

@@ -86,5 +86,6 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api).*)"],
+  // Exclude public files under /assets/ so logos and static media load without a session (e.g. login).
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api|assets/).*)"],
 };

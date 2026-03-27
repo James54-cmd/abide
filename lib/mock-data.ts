@@ -155,3 +155,21 @@ export const topicVerses: Record<string, Verse[]> = {
 };
 
 export const searchableVerses: Verse[] = Object.values(topicVerses).flat();
+
+function dedupeVersesByReference(verses: Verse[]): Verse[] {
+  const seen = new Set<string>();
+  const out: Verse[] = [];
+  for (const v of verses) {
+    if (seen.has(v.reference)) continue;
+    seen.add(v.reference);
+    out.push(v);
+  }
+  return out;
+}
+
+/** Pool for PageLoader — verse of the day, topics, and encouragement samples (deduped). */
+export const LOADER_VERSES: Verse[] = dedupeVersesByReference([
+  verseOfTheDay,
+  ...searchableVerses,
+  ...mockEncouragements.flatMap((e) => e.verses),
+]);

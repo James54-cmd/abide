@@ -5,7 +5,7 @@ import { X } from "lucide-react";
 import PageTransition from "@/components/PageTransition";
 import SettingsProfileCard from "@/features/settings/components/SettingsProfileCard";
 import SettingsSecurityCard from "@/features/settings/components/SettingsSecurityCard";
-import SettingsPageSkeleton from "@/features/settings/components/SettingsPageSkeleton";
+import PageLoader from "@/components/PageLoader";
 import { useSettingsState } from "@/features/settings/hooks/useSettingsState";
 import { getAvatar, getInitials } from "@/lib/utils";
 
@@ -17,7 +17,7 @@ export default function SettingsPage() {
   if (state.isLoading) {
     return (
       <PageTransition>
-        <SettingsPageSkeleton />
+        <PageLoader />
       </PageTransition>
     );
   }

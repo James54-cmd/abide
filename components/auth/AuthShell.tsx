@@ -1,5 +1,5 @@
 import { ReactNode } from "react";
-import { Cross } from "lucide-react";
+import Image from "next/image";
 
 type AuthShellProps = {
   children: ReactNode;
@@ -9,12 +9,15 @@ export default function AuthShell({ children }: AuthShellProps) {
   return (
     <div className="mx-auto max-w-[430px] min-h-dvh flex flex-col items-center justify-center bg-parchment dark:bg-dark-bg px-6">
       <div className="flex flex-col items-center text-center mb-10">
-        <div className="w-16 h-16 rounded-full bg-gold/10 flex items-center justify-center mb-4">
-          <Cross className="w-8 h-8 text-gold" strokeWidth={1.2} />
-        </div>
-        <h1 className="text-3xl font-serif font-semibold text-ink dark:text-parchment">
-          Abide
-        </h1>
+        <Image
+          src="/assets/abide-logo.png"
+          alt="Abide"
+          width={897}
+          height={278}
+          unoptimized
+          className="h-14 w-[min(180px,78vw)] object-contain mb-1"
+          priority
+        />
         <p className="text-sm text-muted mt-2">
           Bible encouragement, always with you.
         </p>

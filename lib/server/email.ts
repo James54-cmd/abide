@@ -15,6 +15,18 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+/** Logo block for HTML emails; image URL needs NEXT_PUBLIC_SITE_URL so clients can load it. */
+function abideLogoImgForEmail(): string {
+  const base = (process.env.NEXT_PUBLIC_SITE_URL ?? "").replace(/\/$/, "");
+  if (!base) {
+    return `<p style="margin:0 0 4px; font-size:11px; letter-spacing:6px; text-transform:uppercase; color:#D4AF37; font-family:Georgia, serif;">A B I D E</p>`;
+  }
+  const src = `${base}/assets/abide-logo.png`;
+  return `<div style="margin-bottom:16px;">
+    <img src="${src}" alt="Abide" width="260" height="81" style="display:block; margin:0 auto; max-width:260px; height:auto; border:0; outline:none; text-decoration:none;" />
+  </div>`;
+}
+
 export async function sendVerificationEmail(email: string, link: string, fullName?: string) {
   if (!host || !user || !pass) {
     console.error("SMTP settings are missing in .env.local. Email NOT sent.");
@@ -58,18 +70,7 @@ export async function sendVerificationEmail(email: string, link: string, fullNam
           <!-- Header -->
           <tr>
             <td align="center" style="padding: 48px 48px 32px;">
-              <!-- Logo mark (Cross SVG) -->
-              <div style="margin-bottom:20px;">
-                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M11 2a2 2 0 0 0-2 2v5H4a2 2 0 0 0-2 2v2c0 1.1.9 2 2 2h5v5c0 1.1.9 2 2 2h2a2 2 0 0 0 2-2v-5h5a2 2 0 0 0 2-2v-2a2 2 0 0 0-2-2h-5V4a2 2 0 0 0-2-2h-2z" fill="#D4AF37"/>
-                </svg>
-              </div>
-
-              <!-- Wordmark -->
-              <p style="margin:0; font-size:11px; letter-spacing:6px; text-transform:uppercase;
-                         color:#D4AF37; font-family:Georgia, serif;">
-                A B I D E
-              </p>
+              ${abideLogoImgForEmail()}
 
               <!-- Divider -->
               <table width="100%" cellpadding="0" cellspacing="0" border="0"
@@ -228,9 +229,8 @@ export async function sendPasswordResetOtpEmail(email: string, otp: string, full
                         height:3px; font-size:0; line-height:0;">&nbsp;</td>
           </tr>
           <tr>
-            <td align="center" style="padding: 48px 48px 32px;">
-              <p style="margin:0; font-size:11px; letter-spacing:6px; text-transform:uppercase;
-                         color:#D4AF37; font-family:Georgia, serif;">A B I D E</p>
+            <td align="center" style="padding: 48px 48px 24px;">
+              ${abideLogoImgForEmail()}
             </td>
           </tr>
           <tr>
@@ -298,8 +298,8 @@ export async function sendEmailChangeOtpEmail(email: string, otp: string, fullNa
           style="max-width:600px; width:100%; background-color:#FFFFFF; border:1px solid #E0D8C0; border-radius:4px;">
           <tr>
             <td align="center" style="padding: 36px 32px;">
-              <p style="margin:0; font-size:11px; letter-spacing:6px; text-transform:uppercase; color:#D4AF37;">A B I D E</p>
-              <p style="margin:22px 0 10px; font-size:16px; color:#0F0E0B;">Hello ${nameToUse},</p>
+              ${abideLogoImgForEmail()}
+              <p style="margin:8px 0 10px; font-size:16px; color:#0F0E0B;">Hello ${nameToUse},</p>
               <p style="margin:0 0 18px; font-size:14px; color:#5a4f2a;">Use this code to confirm your new email address:</p>
               <p style="margin:0; font-size:32px; font-weight:700; letter-spacing:8px; color:#b8930a;">${otp}</p>
               <p style="margin:18px 0 0; font-size:12px; color:#8a805d;">This code expires in 10 minutes.</p>

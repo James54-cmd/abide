@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import { Cross, Menu, MessageSquare, Plus, User, X } from "lucide-react";
+import { Menu, MessageSquare, Plus, User, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { fetchMySettingsProfile } from "@/lib/graphql/settings/hooks";
@@ -120,14 +120,17 @@ export default function TopBar() {
       <div className="flex items-center justify-between gap-2 h-14 px-4 min-h-14">
         <Link
           href="/"
-          className="flex items-center gap-2 min-w-0 flex-1 rounded-lg -ml-1 pl-1 pr-2 py-1 transition-colors"
+          className="flex items-center min-w-0 flex-1 rounded-lg -ml-1 pl-1 pr-2 py-1 transition-colors"
         >
-          <Cross className="w-5 h-5 text-gold flex-shrink-0" strokeWidth={1.5} aria-hidden />
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span className="text-xl font-serif font-semibold text-ink dark:text-parchment tracking-tight truncate">
-              Abide
-            </span>
-          </div>
+          <Image
+            src="/assets/abide-logo.png"
+            alt="Abide"
+            width={897}
+            height={278}
+            unoptimized
+            className="h-7 w-[88px] max-w-[min(88px,42vw)] object-contain object-left flex-shrink-0"
+            priority
+          />
         </Link>
         <Link href="/settings" aria-label="Open profile">
             <Button

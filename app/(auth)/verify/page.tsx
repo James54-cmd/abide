@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AuthShell from "@/components/auth/AuthShell";
-import VerificationSuccessState from "@/components/auth/VerificationSuccessState";
+import PageLoader from "@/components/PageLoader";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { loginWithGraphql } from "@/lib/graphql/auth";
 import { formatRetryMessage } from "@/lib/auth/verification";
@@ -61,7 +61,6 @@ export default function VerifyPage() {
         if (profile?.verification_status === "verified") {
           setIsVerifiedLocally(true);
           setVerificationStatus("verified");
-          setTimeout(() => router.replace("/"), 1000);
           return;
         }
         if (profile?.verification_status === "pending") {
@@ -85,7 +84,6 @@ export default function VerifyPage() {
                 const status = payload.new?.verification_status;
                 if (status === "verified") {
                   setIsVerifiedLocally(true);
-                  setTimeout(() => router.replace("/"), 1000);
                 } else if (status === "pending") {
                   setVerificationStatus("pending");
                 } else if (status === "expired") {
@@ -138,7 +136,6 @@ export default function VerifyPage() {
                   // Ignore auto-login errors here to just proceed with redirect
                 }
             }
-            setTimeout(() => router.replace("/"), 1000);
           } else if (status === "pending") {
             setVerificationStatus("pending");
           } else if (status === "expired") {
@@ -158,6 +155,12 @@ export default function VerifyPage() {
       if (channel) supabase.removeChannel(channel);
     };
   }, [router]);
+
+  useEffect(() => {
+    if (!isVerifiedLocally) return;
+    const id = window.setTimeout(() => router.replace("/"), 1600);
+    return () => window.clearTimeout(id);
+  }, [isVerifiedLocally, router]);
 
   const handleResend = async () => {
     if (!email) return;
@@ -199,7 +202,7 @@ export default function VerifyPage() {
   if (isVerifiedLocally) {
     return (
       <AuthShell>
-        <VerificationSuccessState />
+        <PageLoader className="min-h-[55vh]" />
       </AuthShell>
     );
   }

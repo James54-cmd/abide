@@ -39,10 +39,15 @@ const config: Config = {
           "54%": { transform: "translateX(-5px)" },
           "72%": { transform: "translateX(5px)" },
         },
+        "abide-symbol-breathe": {
+          "0%, 100%": { opacity: "0.88", transform: "scale(1)" },
+          "50%": { opacity: "1", transform: "scale(1.06)" },
+        },
       },
       animation: {
         "pulse-dot": "pulse-dot 1.4s ease-in-out infinite",
         "otp-shake": "otp-shake 0.45s ease-in-out",
+        "abide-symbol-breathe": "abide-symbol-breathe 3.2s ease-in-out infinite",
       },
     },
   },
