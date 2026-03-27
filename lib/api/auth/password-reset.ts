@@ -27,7 +27,20 @@ export async function completePasswordReset(email: string, otp: string, password
   });
 
   if (!response.ok) {
-    const body = (await response.json().catch(() => ({}))) as { error?: string };
-    throw new Error(body.error ?? "Could not reset password. Please try again.");
+    const body = (await response.json().catch(() => ({}))) as { error?: string; code?: string };
+    const err = new Error(body.error ?? "Could not reset password. Please try again.") as Error & {
+      code?: string;
+    };
+    if (typeof body.code === "string") {
+      err.code = body.code;
+    }
+    throw err;
   }
+}
+
+export function getPasswordResetCompletionErrorCode(error: unknown): string | undefined {
+  if (error instanceof Error && typeof (error as Error & { code?: string }).code === "string") {
+    return (error as Error & { code: string }).code;
+  }
+  return undefined;
 }

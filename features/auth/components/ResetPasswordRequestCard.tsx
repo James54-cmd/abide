@@ -1,6 +1,7 @@
 "use client";
 
 import OtpModal from "@/components/ui/otp-modal";
+import type { WrongOtpEncouragement } from "@/features/auth/passwordResetOtpCopy";
 import { Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 
@@ -13,6 +14,7 @@ type Props = {
   isOtpModalOpen: boolean;
   message: string | null;
   error: string | null;
+  wrongOtpEncouragement: WrongOtpEncouragement | null;
   isSendingOtp: boolean;
   isResettingPassword: boolean;
   canResendOtp: boolean;
@@ -36,6 +38,7 @@ export default function ResetPasswordRequestCard({
   isOtpModalOpen,
   message,
   error,
+  wrongOtpEncouragement,
   isSendingOtp,
   isResettingPassword,
   canResendOtp,
@@ -157,8 +160,20 @@ export default function ResetPasswordRequestCard({
         resendLabel={
           isSendingOtp ? "Sending..." : canResendOtp ? "Send code again" : `Send again in ${otpResendCountdownLabel}`
         }
-        helperText="For security, this code expires quickly."
-      />
+        helperText="For security, this code expires quickly. You can try it up to three times before requesting a new one."
+      >
+        {wrongOtpEncouragement ? (
+          <div
+            className="rounded-xl border border-amber-200/80 bg-amber-50/90 dark:border-amber-900/40 dark:bg-amber-950/30 px-3 py-3 space-y-2 text-left"
+            role="status"
+          >
+            <p className="text-sm text-amber-950 dark:text-amber-100/95">{wrongOtpEncouragement.body}</p>
+            <p className="text-xs italic text-amber-800/90 dark:text-amber-200/80 leading-snug">
+              {wrongOtpEncouragement.citation}
+            </p>
+          </div>
+        ) : null}
+      </OtpModal>
     </div>
   );
 }

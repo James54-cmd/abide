@@ -20,6 +20,7 @@ export default function ResetPasswordRequestPage() {
           isOtpModalOpen={state.isOtpModalOpen}
           message={state.message}
           error={state.error}
+          wrongOtpEncouragement={state.wrongOtpEncouragement}
           isSendingOtp={state.isSendingOtp}
           isResettingPassword={state.isResettingPassword}
           canResendOtp={state.canResendOtp}

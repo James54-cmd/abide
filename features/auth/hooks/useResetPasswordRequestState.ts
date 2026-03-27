@@ -2,7 +2,16 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { completePasswordReset, requestPasswordResetOtp } from "@/lib/api/auth/password-reset";
+import {
+  completePasswordReset,
+  getPasswordResetCompletionErrorCode,
+  requestPasswordResetOtp,
+} from "@/lib/api/auth/password-reset";
+import {
+  getWrongPasswordResetOtpEncouragement,
+  PASSWORD_RESET_OTP_MAX_WRONG_ATTEMPTS,
+  type WrongOtpEncouragement,
+} from "@/features/auth/passwordResetOtpCopy";
 import { formatCountdown } from "@/lib/utils";
 
 const OTP_RESEND_COOLDOWN_SECONDS = 60;
@@ -19,6 +28,8 @@ export function useResetPasswordRequestState() {
   const [error, setError] = useState<string | null>(null);
   const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [isResettingPassword, setIsResettingPassword] = useState(false);
+  const [wrongOtpAttempts, setWrongOtpAttempts] = useState(0);
+  const [wrongOtpEncouragement, setWrongOtpEncouragement] = useState<WrongOtpEncouragement | null>(null);
   const [otpResendCooldownSeconds, setOtpResendCooldownSeconds] = useState(0);
   const canResendOtp = otpResendCooldownSeconds <= 0;
   const otpResendCountdownLabel = formatCountdown(otpResendCooldownSeconds);
@@ -30,6 +41,10 @@ export function useResetPasswordRequestState() {
     }, 1000);
     return () => window.clearInterval(timer);
   }, [otpResendCooldownSeconds]);
+
+  useEffect(() => {
+    setWrongOtpEncouragement(null);
+  }, [otp]);
 
   const sendOtp = useCallback(async () => {
     const normalized = email.trim().toLowerCase();
@@ -56,6 +71,8 @@ export function useResetPasswordRequestState() {
       await requestPasswordResetOtp(normalized);
       setIsOtpSent(true);
       setIsOtpModalOpen(true);
+      setWrongOtpAttempts(0);
+      setWrongOtpEncouragement(null);
       setOtpResendCooldownSeconds(OTP_RESEND_COOLDOWN_SECONDS);
       setMessage("If an account exists for that email, we sent a 6-digit reset code.");
     } catch (err) {
@@ -99,14 +116,29 @@ export function useResetPasswordRequestState() {
       setError(null);
       await completePasswordReset(normalized, normalizedOtp, newPassword);
       setIsOtpModalOpen(false);
+      setWrongOtpAttempts(0);
+      setWrongOtpEncouragement(null);
       router.replace("/reset-password/success");
     } catch (err) {
-      const msg = err instanceof Error ? err.message.toLowerCase() : "";
-      if (msg.includes("expired")) {
+      const code = getPasswordResetCompletionErrorCode(err);
+      if (code === "EXPIRED") {
         router.replace("/reset-password/failed?reason=expired");
         return;
       }
-      if (msg.includes("incorrect") || msg.includes("invalid")) {
+      if (code === "WRONG_OTP") {
+        const next = wrongOtpAttempts + 1;
+        setWrongOtpAttempts(next);
+        if (next >= PASSWORD_RESET_OTP_MAX_WRONG_ATTEMPTS) {
+          router.replace("/reset-password/failed?reason=invalid");
+          return;
+        }
+        const encouragement = getWrongPasswordResetOtpEncouragement(next);
+        if (encouragement) {
+          setWrongOtpEncouragement(encouragement);
+        }
+        return;
+      }
+      if (code === "NOT_FOUND") {
         router.replace("/reset-password/failed?reason=invalid");
         return;
       }
@@ -114,7 +146,7 @@ export function useResetPasswordRequestState() {
     } finally {
       setIsResettingPassword(false);
     }
-  }, [email, otp, newPassword, confirmPassword, router]);
+  }, [email, otp, newPassword, confirmPassword, router, wrongOtpAttempts]);
 
   return {
     email,
@@ -127,6 +159,7 @@ export function useResetPasswordRequestState() {
     error,
     isSendingOtp,
     isResettingPassword,
+    wrongOtpEncouragement,
     canResendOtp,
     otpResendCountdownLabel,
     setEmail,

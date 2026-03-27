@@ -45,7 +45,10 @@ export async function POST(request: NextRequest) {
 
   if (findError || !profile) {
     return NextResponse.json(
-      { error: "That reset code is invalid or expired. Please request a new one." },
+      {
+        error: "That reset code is invalid or expired. Please request a new one.",
+        code: "NOT_FOUND",
+      },
       { status: 400 }
     );
   }
@@ -62,13 +65,16 @@ export async function POST(request: NextRequest) {
       })
       .eq("id", profile.id);
     return NextResponse.json(
-      { error: "That reset code has expired. Please request a new one." },
+      { error: "That reset code has expired. Please request a new one.", code: "EXPIRED" },
       { status: 400 }
     );
   }
   if ((profile.password_reset_token ?? "").trim() !== otp) {
     return NextResponse.json(
-      { error: "The reset code is incorrect. Please check the code and try again." },
+      {
+        error: "The reset code is incorrect. Please check the code and try again.",
+        code: "WRONG_OTP",
+      },
       { status: 400 }
     );
   }
@@ -78,7 +84,10 @@ export async function POST(request: NextRequest) {
   });
 
   if (authError) {
-    return NextResponse.json({ error: "Could not update your password. Please try again." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Could not update your password. Please try again.", code: "UPDATE_FAILED" },
+      { status: 400 }
+    );
   }
 
   await adminClient
