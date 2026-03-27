@@ -1,5 +1,8 @@
 "use client";
 
+import { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
+
 type Props = {
   hasToken: boolean;
   newPassword: string;
@@ -23,6 +26,9 @@ export default function ResetPasswordConfirmCard({
   onConfirmPasswordChange,
   onSubmit,
 }: Props) {
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   return (
     <div className="w-full rounded-3xl border border-gold/10 bg-white/70 dark:bg-dark-card/70 backdrop-blur-sm p-4 sm:p-5 space-y-4 shadow-warm">
       <div className="text-center space-y-1">
@@ -31,35 +37,55 @@ export default function ResetPasswordConfirmCard({
         </h2>
         <p className="text-sm text-muted">
           {hasToken
-            ? "Enter your new password below."
-            : "Open the link from your email to continue."}
+            ? "Password reset now uses OTP verification."
+            : "Request a reset code to continue."}
         </p>
       </div>
 
       {!hasToken ? (
         <p className="text-xs text-red-600 text-center rounded-2xl bg-red-50 px-3 py-2 border border-red-100">
-          This page needs a valid link from your email. Request a new reset link below.
+          This page is no longer used for link-based resets. Request a reset code below.
         </p>
       ) : null}
 
       {hasToken ? (
         <>
-          <input
-            type="password"
-            value={newPassword}
-            onChange={(e) => onNewPasswordChange(e.target.value)}
-            placeholder="New password"
-            disabled={isSubmitting}
-            className="w-full bg-white dark:bg-dark-card border border-gold/10 rounded-full px-4 py-3.5 text-sm text-ink dark:text-parchment placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-gold/30 disabled:opacity-60"
-          />
-          <input
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => onConfirmPasswordChange(e.target.value)}
-            placeholder="Confirm new password"
-            disabled={isSubmitting}
-            className="w-full bg-white dark:bg-dark-card border border-gold/10 rounded-full px-4 py-3.5 text-sm text-ink dark:text-parchment placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-gold/30 disabled:opacity-60"
-          />
+          <div className="relative">
+            <input
+              type={showNewPassword ? "text" : "password"}
+              value={newPassword}
+              onChange={(e) => onNewPasswordChange(e.target.value)}
+              placeholder="New password"
+              disabled={isSubmitting}
+              className="w-full bg-white dark:bg-dark-card border border-gold/10 rounded-full px-4 py-3.5 pr-11 text-sm text-ink dark:text-parchment placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-gold/30 disabled:opacity-60"
+            />
+            <button
+              type="button"
+              onClick={() => setShowNewPassword((prev) => !prev)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-ink dark:hover:text-parchment"
+              aria-label={showNewPassword ? "Hide password" : "Show password"}
+            >
+              {showNewPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+            </button>
+          </div>
+          <div className="relative">
+            <input
+              type={showConfirmPassword ? "text" : "password"}
+              value={confirmPassword}
+              onChange={(e) => onConfirmPasswordChange(e.target.value)}
+              placeholder="Confirm new password"
+              disabled={isSubmitting}
+              className="w-full bg-white dark:bg-dark-card border border-gold/10 rounded-full px-4 py-3.5 pr-11 text-sm text-ink dark:text-parchment placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-gold/30 disabled:opacity-60"
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword((prev) => !prev)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-ink dark:hover:text-parchment"
+              aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+            >
+              {showConfirmPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+            </button>
+          </div>
           <button
             type="button"
             onClick={onSubmit}

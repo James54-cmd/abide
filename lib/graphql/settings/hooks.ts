@@ -1,7 +1,7 @@
 import { getApolloClient } from "@/lib/graphql/client";
 import { getAccessToken } from "@/lib/supabase";
 import { MY_SETTINGS_PROFILE_QUERY } from "@/lib/graphql/settings/queries";
-import { UPDATE_MY_PASSWORD_MUTATION, UPDATE_MY_PROFILE_MUTATION } from "@/lib/graphql/settings/mutations";
+import { UPDATE_MY_PROFILE_MUTATION } from "@/lib/graphql/settings/mutations";
 
 type SettingsProfilePayload = {
   id: string;
@@ -42,17 +42,5 @@ export async function updateMySettingsProfile(input: { fullName: string; avatarU
     throw new Error("Unable to update profile.");
   }
   return data.updateMyProfile;
-}
-
-export async function updateMyPassword(newPassword: string) {
-  const token = await getAccessToken();
-  if (!token) throw new Error("Unauthorized");
-
-  const client = getApolloClient();
-  await client.mutate({
-    mutation: UPDATE_MY_PASSWORD_MUTATION,
-    variables: { newPassword },
-    context: { headers: { Authorization: `Bearer ${token}` } },
-  });
 }
 

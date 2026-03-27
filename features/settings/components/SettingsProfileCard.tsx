@@ -1,6 +1,7 @@
 "use client";
 
 import type { SettingsProfile } from "@/features/settings/types";
+import OtpModal from "@/components/ui/otp-modal";
 
 type Props = {
   profile: SettingsProfile;
@@ -12,12 +13,17 @@ type Props = {
   isSendingEmailOtp: boolean;
   isVerifyingEmailOtp: boolean;
   isEmailOtpSent: boolean;
+  isOtpModalOpen: boolean;
+  canResendEmailOtp: boolean;
+  otpResendCountdownLabel: string;
   onFullNameChange: (value: string) => void;
   onNewEmailChange: (value: string) => void;
   onEmailOtpChange: (value: string) => void;
   onStartEdit: () => void;
   onCancelEdit: () => void;
   onSendEmailOtp: () => void;
+  onOpenOtpModal: () => void;
+  onCloseOtpModal: () => void;
   onVerifyEmailOtp: () => void;
   onSaveProfile: () => void;
 };
@@ -32,12 +38,17 @@ export default function SettingsProfileCard({
   isSendingEmailOtp,
   isVerifyingEmailOtp,
   isEmailOtpSent,
+  isOtpModalOpen,
+  canResendEmailOtp,
+  otpResendCountdownLabel,
   onFullNameChange,
   onNewEmailChange,
   onEmailOtpChange,
   onStartEdit,
   onCancelEdit,
   onSendEmailOtp,
+  onOpenOtpModal,
+  onCloseOtpModal,
   onVerifyEmailOtp,
   onSaveProfile,
 }: Props) {
@@ -67,31 +78,25 @@ export default function SettingsProfileCard({
             <button
               type="button"
               onClick={onSendEmailOtp}
-              disabled={isSendingEmailOtp || isSavingProfile}
+                disabled={isSendingEmailOtp || isSavingProfile || !canResendEmailOtp}
               className="rounded-full border border-gold/20 px-3 py-2 text-xs font-semibold text-ink dark:text-parchment disabled:opacity-60"
             >
-              {isSendingEmailOtp ? "Sending..." : "Send OTP"}
+                {isSendingEmailOtp
+                  ? "Sending..."
+                  : canResendEmailOtp
+                    ? "Send OTP"
+                    : `Retry in ${otpResendCountdownLabel}`}
             </button>
           </div>
 
           {isEmailOtpSent ? (
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={emailOtp}
-                onChange={(event) => onEmailOtpChange(event.target.value)}
-                placeholder="Enter OTP"
-                className="flex-1 rounded-xl border border-gold/10 bg-transparent px-3 py-2 text-sm text-ink dark:text-parchment focus:outline-none focus:ring-2 focus:ring-gold/30"
-              />
-              <button
-                type="button"
-                onClick={onVerifyEmailOtp}
-                disabled={isVerifyingEmailOtp || isSavingProfile}
-                className="rounded-full bg-gold text-white px-3 py-2 text-xs font-semibold disabled:opacity-60"
-              >
-                {isVerifyingEmailOtp ? "Verifying..." : "Verify OTP"}
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={onOpenOtpModal}
+              className="w-full rounded-full border border-gold/20 px-4 py-2.5 text-sm font-semibold text-ink dark:text-parchment"
+            >
+              Enter verification code
+            </button>
           ) : null}
         </div>
       ) : null}
@@ -138,8 +143,29 @@ export default function SettingsProfileCard({
       )}
 
       {isEditingProfile && isEmailOtpSent ? (
-        <p className="text-xs text-muted">A verification code was sent to your new email.</p>
+        <div className="rounded-xl border border-gold/10 bg-gold/5 px-3 py-2 text-center">
+          <p className="text-xs italic text-muted">
+            &ldquo;Your word is a lamp for my feet, a light on my path.&rdquo; - Psalm 119:105
+          </p>
+        </div>
       ) : null}
+
+      <OtpModal
+        open={isOtpModalOpen}
+        onOpenChange={(open) => (open ? onOpenOtpModal() : onCloseOtpModal())}
+        title="Please check your email"
+        description="Enter the 6-digit code sent to your new email"
+        otpValue={emailOtp}
+        onOtpChange={onEmailOtpChange}
+        onConfirm={onVerifyEmailOtp}
+        onResend={onSendEmailOtp}
+        isConfirming={isVerifyingEmailOtp}
+        isResending={isSendingEmailOtp}
+        isBusy={isSavingProfile}
+        canResend={canResendEmailOtp}
+        resendLabel={canResendEmailOtp ? "Send code again" : `Send again in ${otpResendCountdownLabel}`}
+        helperText="Your word is a lamp for my feet, a light on my path. - Psalm 119:105"
+      />
     </div>
   );
 }

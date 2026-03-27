@@ -3,9 +3,9 @@
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { uploadAvatarFile } from "@/lib/api/settings/requests";
 import { requestEmailChangeOtp, verifyEmailChangeOtp } from "@/lib/api/auth/email-change";
-import { requestPasswordResetEmail } from "@/lib/api/auth/password-reset";
 import { fetchMySettingsProfile, updateMySettingsProfile } from "@/lib/graphql/settings/hooks";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
+import { formatCountdown } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { SettingsProfile, SettingsTab } from "@/features/settings/types";
@@ -18,13 +18,15 @@ function broadcastProfileTopbar(avatarUrl: string | null) {
   );
 }
 
+const EMAIL_CHANGE_OTP_LENGTH = 6;
+const OTP_RESEND_COOLDOWN_SECONDS = 60;
+
 export function useSettingsState() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isSavingPassword, setIsSavingPassword] = useState(false);
-  const [isSendingReset, setIsSendingReset] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [activeTab, setActiveTab] = useState<SettingsTab>("profile");
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -34,6 +36,8 @@ export function useSettingsState() {
   const [isSendingEmailOtp, setIsSendingEmailOtp] = useState(false);
   const [isVerifyingEmailOtp, setIsVerifyingEmailOtp] = useState(false);
   const [isEmailOtpSent, setIsEmailOtpSent] = useState(false);
+  const [isOtpModalOpen, setIsOtpModalOpen] = useState(false);
+  const [otpResendCooldownSeconds, setOtpResendCooldownSeconds] = useState(0);
 
   const [profile, setProfile] = useState<SettingsProfile>({
     userId: null,
@@ -42,13 +46,27 @@ export function useSettingsState() {
     avatarUrl: null,
   });
 
+  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
   const canSavePassword = useMemo(
-    () => newPassword.length >= 8 && newPassword === confirmPassword,
-    [newPassword, confirmPassword]
+    () =>
+      currentPassword.length > 0 &&
+      newPassword.length >= 8 &&
+      newPassword === confirmPassword,
+    [currentPassword, newPassword, confirmPassword]
   );
+  const canResendEmailOtp = otpResendCooldownSeconds <= 0;
+  const otpResendCountdownLabel = formatCountdown(otpResendCooldownSeconds);
+
+  useEffect(() => {
+    if (otpResendCooldownSeconds <= 0) return;
+    const timer = window.setInterval(() => {
+      setOtpResendCooldownSeconds((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [otpResendCooldownSeconds]);
   useEffect(() => {
     async function loadProfile() {
       try {
@@ -95,6 +113,8 @@ export function useSettingsState() {
     setNewEmail(profile.email);
     setEmailOtp("");
     setIsEmailOtpSent(false);
+    setIsOtpModalOpen(false);
+    setOtpResendCooldownSeconds(0);
     setIsEditingProfile(true);
   };
 
@@ -105,6 +125,8 @@ export function useSettingsState() {
     setNewEmail(profile.email);
     setEmailOtp("");
     setIsEmailOtpSent(false);
+    setIsOtpModalOpen(false);
+    setOtpResendCooldownSeconds(0);
     setIsEditingProfile(false);
     setProfileNameBeforeEdit(null);
   };
@@ -167,10 +189,19 @@ export function useSettingsState() {
       setIsSendingEmailOtp(true);
       await requestEmailChangeOtp(newEmail);
       setIsEmailOtpSent(true);
+      setIsOtpModalOpen(true);
+      setOtpResendCooldownSeconds(OTP_RESEND_COOLDOWN_SECONDS);
       toast.success("OTP sent to your new email.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not send OTP.";
       toast.error(message);
+      const retryMatch = message.match(/(\d+)s/);
+      if (retryMatch) {
+        const retrySeconds = Number(retryMatch[1]);
+        if (Number.isFinite(retrySeconds) && retrySeconds > 0) {
+          setOtpResendCooldownSeconds(retrySeconds);
+        }
+      }
     } finally {
       setIsSendingEmailOtp(false);
     }
@@ -178,18 +209,25 @@ export function useSettingsState() {
 
   const verifyEmailOtp = async () => {
     if (!isEditingProfile || !isEmailOtpSent) return;
-    if (!emailOtp.trim()) {
+    const normalizedOtp = emailOtp.trim();
+    if (!normalizedOtp) {
       toast.error("Please enter the OTP code.");
+      return;
+    }
+    if (normalizedOtp.length !== EMAIL_CHANGE_OTP_LENGTH) {
+      toast.error(`Please enter the ${EMAIL_CHANGE_OTP_LENGTH}-digit code.`);
       return;
     }
 
     try {
       setIsVerifyingEmailOtp(true);
-      const result = await verifyEmailChangeOtp(emailOtp);
+      const result = await verifyEmailChangeOtp(normalizedOtp);
       setProfile((prev) => ({ ...prev, email: result.email }));
       setNewEmail(result.email);
       setEmailOtp("");
       setIsEmailOtpSent(false);
+      setIsOtpModalOpen(false);
+      setOtpResendCooldownSeconds(0);
       toast.success("Email updated successfully.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not verify OTP.";
@@ -201,32 +239,42 @@ export function useSettingsState() {
 
   const setPassword = async () => {
     if (!canSavePassword) return;
+    const email = profile.email?.trim();
+    if (!email) {
+      toast.error("No email on your profile. You cannot verify your current password here.");
+      return;
+    }
+
     try {
       setIsSavingPassword(true);
       const supabase = getSupabaseBrowserClient();
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
-      if (error) throw error;
 
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password: currentPassword,
+      });
+      if (signInError) {
+        const hint = signInError.message.toLowerCase();
+        toast.error(
+          hint.includes("invalid") || hint.includes("wrong") || hint.includes("credentials")
+            ? "Current password is incorrect."
+            : signInError.message || "Could not verify your current password."
+        );
+        return;
+      }
+
+      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+      if (updateError) throw updateError;
+
+      setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
       toast.success("Password updated");
-    } catch {
-      toast.error("Could not update password");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not update password";
+      toast.error(message);
     } finally {
       setIsSavingPassword(false);
-    }
-  };
-
-  const sendResetEmail = async () => {
-    if (!profile.email) return;
-    try {
-      setIsSendingReset(true);
-      await requestPasswordResetEmail(profile.email);
-      toast.success("Reset email sent");
-    } catch {
-      toast.error("Could not send reset email");
-    } finally {
-      setIsSendingReset(false);
     }
   };
 
@@ -249,7 +297,6 @@ export function useSettingsState() {
     isSavingProfile,
     isUploadingAvatar,
     isSavingPassword,
-    isSendingReset,
     isLoggingOut,
     activeTab,
     isEditingProfile,
@@ -258,15 +305,21 @@ export function useSettingsState() {
     isSendingEmailOtp,
     isVerifyingEmailOtp,
     isEmailOtpSent,
+    isOtpModalOpen,
+    canResendEmailOtp,
+    otpResendCountdownLabel,
     setActiveTab,
     profile,
     setProfile,
+    currentPassword,
+    setCurrentPassword,
     newPassword,
     setNewPassword,
     confirmPassword,
     setConfirmPassword,
     setNewEmail,
     setEmailOtp,
+    setIsOtpModalOpen,
     canSavePassword,
     saveProfile,
     startEditingProfile,
@@ -276,7 +329,6 @@ export function useSettingsState() {
     uploadAvatar,
     removeAvatar,
     setPassword,
-    sendResetEmail,
     logout,
   };
 }

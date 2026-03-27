@@ -305,7 +305,6 @@ const typeDefs = `
     resendVerification(email: String!): Boolean!
     verifyEmail(token: String!): Boolean!
     updateMyProfile(input: UpdateMyProfileInput!): SettingsProfile!
-    updateMyPassword(newPassword: String!): Boolean!
   }
 
   type Query {
@@ -1420,23 +1419,6 @@ const resolvers = {
         fullName: data.full_name,
         avatarUrl: data.avatar_url ?? null,
       };
-    },
-    updateMyPassword: async (
-      _: unknown,
-      args: { newPassword: string },
-      context: GraphQlContext
-    ) => {
-      const { user, supabase } = await requireUserFromAuthHeader(context.authHeader);
-      const nextPassword = args.newPassword?.trim();
-      if (!nextPassword || nextPassword.length < 8) {
-        throw new Error("Password must be at least 8 characters.");
-      }
-
-      const { error } = await supabase.auth.admin.updateUserById(user.id, {
-        password: nextPassword,
-      });
-      if (error) throw error;
-      return true;
     },
   },
 };

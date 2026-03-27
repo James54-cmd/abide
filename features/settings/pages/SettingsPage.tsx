@@ -109,6 +109,9 @@ export default function SettingsPage() {
                   isSendingEmailOtp={state.isSendingEmailOtp}
                   isVerifyingEmailOtp={state.isVerifyingEmailOtp}
                   isEmailOtpSent={state.isEmailOtpSent}
+                  isOtpModalOpen={state.isOtpModalOpen}
+                  canResendEmailOtp={state.canResendEmailOtp}
+                  otpResendCountdownLabel={state.otpResendCountdownLabel}
                   onFullNameChange={(value) =>
                     state.setProfile((prev) => ({
                       ...prev,
@@ -120,6 +123,8 @@ export default function SettingsPage() {
                   onStartEdit={state.startEditingProfile}
                   onCancelEdit={state.cancelEditingProfile}
                   onSendEmailOtp={() => void state.sendEmailOtp()}
+                  onOpenOtpModal={() => state.setIsOtpModalOpen(true)}
+                  onCloseOtpModal={() => state.setIsOtpModalOpen(false)}
                   onVerifyEmailOtp={() => void state.verifyEmailOtp()}
                   onSaveProfile={() => void state.saveProfile()}
                 />
@@ -130,16 +135,15 @@ export default function SettingsPage() {
                   Account & Security
                 </h4>
                 <SettingsSecurityCard
-                  email={state.profile.email}
+                  currentPassword={state.currentPassword}
                   newPassword={state.newPassword}
                   confirmPassword={state.confirmPassword}
                   canSavePassword={state.canSavePassword}
                   isSavingPassword={state.isSavingPassword}
-                  isSendingReset={state.isSendingReset}
+                  onCurrentPasswordChange={state.setCurrentPassword}
                   onNewPasswordChange={state.setNewPassword}
                   onConfirmPasswordChange={state.setConfirmPassword}
                   onUpdatePassword={() => void state.setPassword()}
-                  onSendReset={() => void state.sendResetEmail()}
                 />
               </div>
             )}

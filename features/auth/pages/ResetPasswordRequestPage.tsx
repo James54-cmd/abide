@@ -13,11 +13,25 @@ export default function ResetPasswordRequestPage() {
       <div className="w-full space-y-4">
         <ResetPasswordRequestCard
           email={state.email}
+          otp={state.otp}
+          newPassword={state.newPassword}
+          confirmPassword={state.confirmPassword}
+          isOtpSent={state.isOtpSent}
+          isOtpModalOpen={state.isOtpModalOpen}
           message={state.message}
           error={state.error}
-          isSubmitting={state.isSubmitting}
+          isSendingOtp={state.isSendingOtp}
+          isResettingPassword={state.isResettingPassword}
+          canResendOtp={state.canResendOtp}
+          otpResendCountdownLabel={state.otpResendCountdownLabel}
           onEmailChange={state.setEmail}
-          onSubmit={() => void state.submit()}
+          onOtpChange={state.setOtp}
+          onNewPasswordChange={state.setNewPassword}
+          onConfirmPasswordChange={state.setConfirmPassword}
+          onSendOtp={() => void state.sendOtp()}
+          onOpenOtpModal={() => state.setIsOtpModalOpen(true)}
+          onCloseOtpModal={() => state.setIsOtpModalOpen(false)}
+          onResetPassword={() => void state.resetPassword()}
         />
         <p className="text-center">
           <Link

@@ -2,7 +2,8 @@ import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 
 type Body = {
-  token?: string;
+  email?: string;
+  otp?: string;
   password?: string;
 };
 
@@ -21,10 +22,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const token = body.token?.trim();
+  const email = body.email?.trim().toLowerCase();
+  const otp = body.otp?.trim();
   const password = body.password?.trim();
-  if (!token) {
-    return NextResponse.json({ error: "This reset link is invalid or incomplete." }, { status: 400 });
+  if (!email) {
+    return NextResponse.json({ error: "Please enter your email address." }, { status: 400 });
+  }
+  if (!otp || otp.length !== 6) {
+    return NextResponse.json({ error: "Please enter the 6-digit reset code." }, { status: 400 });
   }
   if (!password || password.length < 8) {
     return NextResponse.json({ error: "Password must be at least 8 characters." }, { status: 400 });
@@ -34,13 +39,13 @@ export async function POST(request: NextRequest) {
 
   const { data: profile, error: findError } = await adminClient
     .from("profiles")
-    .select("id, password_reset_expires_at")
-    .eq("password_reset_token", token)
+    .select("id, password_reset_token, password_reset_expires_at")
+    .eq("email", email)
     .single();
 
   if (findError || !profile) {
     return NextResponse.json(
-      { error: "This reset link is invalid or has expired. Please request a new one." },
+      { error: "That reset code is invalid or expired. Please request a new one." },
       { status: 400 }
     );
   }
@@ -57,7 +62,13 @@ export async function POST(request: NextRequest) {
       })
       .eq("id", profile.id);
     return NextResponse.json(
-      { error: "This reset link has expired. Please request a new password reset." },
+      { error: "That reset code has expired. Please request a new one." },
+      { status: 400 }
+    );
+  }
+  if ((profile.password_reset_token ?? "").trim() !== otp) {
+    return NextResponse.json(
+      { error: "The reset code is incorrect. Please check the code and try again." },
       { status: 400 }
     );
   }

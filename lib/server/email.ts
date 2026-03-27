@@ -194,26 +194,26 @@ export async function sendVerificationEmail(email: string, link: string, fullNam
   });
 }
 
-export async function sendPasswordResetEmail(email: string, link: string, fullName?: string) {
+export async function sendPasswordResetOtpEmail(email: string, otp: string, fullName?: string) {
   if (!host || !user || !pass) {
-    console.error("SMTP settings are missing in .env.local. Password reset email NOT sent.");
-    return;
+    throw new Error("SMTP settings are missing in .env.local.");
   }
 
   const from = process.env.SMTP_FROM || user;
   const nameToUse = fullName || email.split("@")[0];
 
-  await transporter.sendMail({
-    from: `"Abide" <${from}>`,
-    to: email,
-    subject: "Reset your password - Abide",
-    html: `
+  try {
+    await transporter.sendMail({
+      from: `"Abide" <${from}>`,
+      to: email,
+      subject: "Your Abide password reset code",
+      html: `
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Reset your password – Abide</title>
+  <title>Password Reset Code – Abide</title>
 </head>
 <body style="margin:0; padding:0; background-color:#FBFAF7; font-family: Georgia, 'Times New Roman', serif;">
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#FBFAF7; padding: 48px 16px;">
@@ -239,34 +239,14 @@ export async function sendPasswordResetEmail(email: string, link: string, fullNa
                 Hello ${nameToUse},
               </p>
               <p style="margin:0 0 32px; font-size:16px; line-height:1.75; color:#5a4f2a;">
-                We received a request to reset your Abide password. Choose a new password using the link below.
+                We received a request to reset your Abide password. Use this one-time code to continue.
                 If you did not ask for this, you can ignore this email.
               </p>
-              <table cellpadding="0" cellspacing="0" border="0" width="100%">
-                <tr>
-                  <td align="center">
-                    <a href="${link}"
-                      style="display:inline-block;
-                             background: linear-gradient(135deg, #b8930a 0%, #D4AF37 50%, #e8c84a 100%);
-                             color:#FFFFFF;
-                             padding: 16px 48px;
-                             border-radius: 2px;
-                             font-family: Georgia, serif;
-                             font-size: 13px;
-                             font-weight: bold;
-                             letter-spacing: 3px;
-                             text-decoration: none;
-                             text-transform: uppercase;
-                             box-shadow: 0 4px 12px rgba(212, 175, 55, 0.2);">
-                      Reset password
-                    </a>
-                  </td>
-                </tr>
-              </table>
-              <p style="margin:28px 0 0; font-size:12px; color:#b8a56a;
-                         text-align:center; line-height:1.6;">
-                Or copy this link into your browser:<br/>
-                <a href="${link}" style="color:#D4AF37; word-break:break-all; text-decoration:none;">${link}</a>
+              <p style="margin:0; text-align:center; font-size:34px; font-weight:700; letter-spacing:8px; color:#b8930a;">
+                ${otp}
+              </p>
+              <p style="margin:20px 0 0; font-size:12px; color:#8a805d; text-align:center;">
+                This code expires in 10 minutes.
               </p>
             </td>
           </tr>
@@ -282,7 +262,11 @@ export async function sendPasswordResetEmail(email: string, link: string, fullNa
 </body>
 </html>
     `,
-  });
+    });
+  } catch (error) {
+    console.error("Failed to send password reset OTP email:", error);
+    throw new Error("Unable to send reset code email right now.");
+  }
 }
 
 export async function sendEmailChangeOtpEmail(email: string, otp: string, fullName?: string) {
