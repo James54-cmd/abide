@@ -198,8 +198,8 @@ export default function LoginPage() {
 
   if (isEnteringApp) {
     return (
-      <AuthShell>
-        <PageLoader className="min-h-[55vh]" />
+      <AuthShell showChrome={false}>
+        <PageLoader className="min-h-[70vh] w-full" />
       </AuthShell>
     );
   }

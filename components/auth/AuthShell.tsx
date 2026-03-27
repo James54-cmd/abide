@@ -3,9 +3,19 @@ import Image from "next/image";
 
 type AuthShellProps = {
   children: ReactNode;
+  /** When false, only children fill the screen (e.g. full-screen PageLoader). */
+  showChrome?: boolean;
 };
 
-export default function AuthShell({ children }: AuthShellProps) {
+export default function AuthShell({ children, showChrome = true }: AuthShellProps) {
+  if (!showChrome) {
+    return (
+      <div className="mx-auto max-w-[430px] min-h-dvh flex flex-col items-center justify-center bg-parchment dark:bg-dark-bg px-6">
+        {children}
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-[430px] min-h-dvh flex flex-col items-center justify-center bg-parchment dark:bg-dark-bg px-6">
       <div className="flex flex-col items-center text-center mb-10">

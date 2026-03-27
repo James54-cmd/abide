@@ -3,8 +3,8 @@ import PageLoader from "@/components/PageLoader";
 
 export default function AuthSearchParamsFallback() {
   return (
-    <AuthShell>
-      <PageLoader size="compact" className="min-h-[10rem]" />
+    <AuthShell showChrome={false}>
+      <PageLoader className="min-h-[70vh] w-full" />
     </AuthShell>
   );
 }
